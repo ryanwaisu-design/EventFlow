@@ -1,0 +1,156 @@
+/* 排位模組：淺色主題變數（Dashboard 圖表用） */
+.seating-module {
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --primary: #1e293b;
+  --primary-hover: #0f172a;
+  --bg: #f8fafc;
+  --accent: #d97706;
+  --danger: #dc2626;
+  --success: #059669;
+  --export: #059669;
+  --print: #dc2626;
+  --stage: #475569;
+  --main-table: #d97706;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --app-header-height: 0px;
+  color: var(--text);
+}
+
+@media (max-width: 1023px) {
+  .seating-module {
+    --app-header-height: 3.25rem;
+  }
+}
+
+.seating-module.seating-dashboard-view {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--app-header-height) - 2rem);
+  --seating-dashboard-offset: 13rem;
+}
+
+.seating-module.seating-dashboard-view > .page-header {
+  margin-bottom: 1rem;
+}
+
+.seating-module.seating-dashboard-view > .page-header .page-subtitle {
+  display: none;
+}
+
+.seating-module.seating-dashboard-view > .mb-6 {
+  margin-bottom: 1rem !important;
+}
+
+.seating-module.seating-dashboard-view > .mt-8 {
+  display: none;
+}
+
+.seating-module.seating-dashboard-view .dashboard-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.seating-module.seating-dashboard-view .dashboard-body {
+  flex: 1;
+  min-height: calc(100vh - var(--app-header-height) - var(--seating-dashboard-offset, 13rem));
+}
+
+@media (max-width: 1023px) {
+  .seating-module.seating-dashboard-view {
+    --seating-dashboard-offset: 15rem;
+    min-height: calc(100vh - var(--app-header-height) - 1rem);
+  }
+}
+
+.seating-module .btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.seating-module .btn-secondary {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.seating-module .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.seating-module input,
+.seating-module select {
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.seating-module input:focus,
+.seating-module select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+}
+
+.seating-module .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.seating-module .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.seating-module .btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.seating-module .btn-icon-only {
+  padding: 0.35rem 0.5rem;
+  min-width: 2rem;
+}
+
+.seating-module .btn-icon-only span {
+  display: none;
+}
+
+.seating-module .toolbar-actions .btn svg {
+  flex-shrink: 0;
+}
+
+.seating-module .renumber-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: -0.5rem 0 0.75rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 0.85rem;
+  font-weight: 500;
+}

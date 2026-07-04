@@ -1,0 +1,19 @@
+{
+  "name": "EventFlow - 公關活動管理系統",
+  "short_name": "EventFlow",
+  "description": "公關活動管理系統 - 管理嘉賓邀請、出席狀態與現場認人名單",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#f8fafc",
+  "orientation": "any",
+  "lang": "zh-Hant",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
