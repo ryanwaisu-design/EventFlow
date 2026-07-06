@@ -1,4 +1,5 @@
-import { GUEST_CATEGORIES } from '../../data/constants';
+import { useApp } from '../../context/AppContext';
+import { getGuestCategoryLabel } from '../../utils/guestCategories';
 
 const CATEGORY_COLORS = {
   government: 'bg-info/20 text-info border-info/30',
@@ -11,9 +12,13 @@ const CATEGORY_COLORS = {
   other: 'bg-muted/20 text-muted border-muted/30',
 };
 
+const CUSTOM_COLOR = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+
 export default function CategoryTag({ category, small }) {
-  const label = GUEST_CATEGORIES[category] || category || '其他';
-  const color = CATEGORY_COLORS[category] || CATEGORY_COLORS.other;
+  const { settings } = useApp();
+  const label = getGuestCategoryLabel(category, settings);
+  const isBuiltin = category && Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, category);
+  const color = isBuiltin ? CATEGORY_COLORS[category] : CUSTOM_COLOR;
   return (
     <span className={`inline-flex items-center border rounded-full font-medium ${small ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-0.5 text-xs'} ${color}`}>
       {label}

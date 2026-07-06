@@ -92,4 +92,6 @@ export const DEFAULT_SETTINGS = {
     google: { enabled: true, dailyLimit: 80 },
     baidu: { enabled: false, dailyLimit: 0 },
   },
+  /** 使用者自訂嘉賓類別 { key: 顯示名稱 } */
+  customGuestCategories: {},
 };

@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { clearAllData, exportBackup, importBackup } from '../data/storage';
 import { GUEST_REGIONS } from '../data/constants';
+import { listCustomGuestCategories } from '../utils/guestCategories';
 import { downloadText } from '../utils/helpers';
 import { getQuotaUsage, resetQuotaToday } from '../utils/searchQuota';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { FormField, Input, Select } from '../components/ui/FormFields';
 
 export default function Settings() {
-  const { settings, guests, events, attendance, seatingPlans, updateSettings, restoreBackup, showToast } = useApp();
+  const { settings, guests, events, attendance, seatingPlans, updateSettings, restoreBackup, showToast, deleteGuestCategory } = useApp();
   const [form, setForm] = useState({ ...settings });
   const [confirmClear, setConfirmClear] = useState(false);
   const [quota, setQuota] = useState(getQuotaUsage());
@@ -92,6 +93,46 @@ export default function Settings() {
             <span className="text-sm text-secondary">啟用示範資料（僅在無資料時生效）</span>
           </label>
           <button type="submit" className="btn-primary">儲存設定</button>
+        </div>
+
+        <div className="card p-6 mb-6">
+          <h2 className="section-title mb-2">嘉賓類別</h2>
+          <p className="text-sm text-muted mb-4">內建類別以外，可在新增／編輯嘉賓時自行加入（例如「內地」）。</p>
+          {listCustomGuestCategories(form).length === 0 ? (
+            <p className="text-sm text-secondary">尚未新增自訂類別。</p>
+          ) : (
+            <ul className="space-y-2">
+              {listCustomGuestCategories(form).map(([key, label]) => {
+                const inUse = guests.some((g) => g.category === key);
+                return (
+                  <li key={key} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0">
+                    <span className="text-sm text-primary">{label}</span>
+                    <div className="flex items-center gap-2">
+                      {inUse && <span className="text-xs text-muted">使用中</span>}
+                      <button
+                        type="button"
+                        className="text-xs text-danger hover:underline"
+                        onClick={() => {
+                          if (inUse) {
+                            showToast('仍有嘉賓使用此類別，請先更改後再刪除', 'warning');
+                            return;
+                          }
+                          deleteGuestCategory(key);
+                          setForm((f) => {
+                            const next = { ...(f.customGuestCategories || {}) };
+                            delete next[key];
+                            return { ...f, customGuestCategories: next };
+                          });
+                        }}
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
 
         <div className="card p-6 mb-6">

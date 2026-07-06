@@ -12,12 +12,13 @@ import {
   formatDateTime,
 } from './helpers';
 
-function buildGuestRow(event, guest, att) {
+function buildGuestRow(event, guest, att, categories) {
   const aff = getPrimaryAffiliation(guest);
+  const cats = categories || GUEST_CATEGORIES;
   return {
     活動名稱: event?.name || '',
     姓名: guest?.name || '',
-    類別: GUEST_CATEGORIES[guest?.category] || guest?.category || '',
+    類別: cats[guest?.category] || guest?.category || '',
     所屬單位: aff.organization,
     職銜: aff.title,
     電郵: guest?.email || '',
@@ -50,27 +51,28 @@ function exportExcelRows(rows, filename) {
   );
 }
 
-export function buildAttendanceRows(event, guests, attendance, filterFn) {
+export function buildAttendanceRows(event, guests, attendance, filterFn, categories) {
   const guestMap = Object.fromEntries((guests || []).map((g) => [g.id, g]));
   return (attendance || [])
     .filter((a) => a.eventId === event?.id)
     .filter(filterFn || (() => true))
-    .map((a) => buildGuestRow(event, guestMap[a.guestId], a));
+    .map((a) => buildGuestRow(event, guestMap[a.guestId], a, categories));
 }
 
-export function exportAttendanceExcel(event, guests, attendance, filterFn, label, prefix) {
-  const rows = buildAttendanceRows(event, guests, attendance, filterFn);
+export function exportAttendanceExcel(event, guests, attendance, filterFn, label, prefix, categories) {
+  const rows = buildAttendanceRows(event, guests, attendance, filterFn, categories);
   if (!rows.length) throw new Error('沒有可匯出的資料');
   const filename = `${prefix}_${label}_${sanitizeFilename(event.name)}.xlsx`;
   exportExcelRows(rows, filename);
 }
 
-export function exportGuestDatabaseExcel(guests, prefix) {
+export function exportGuestDatabaseExcel(guests, prefix, categories) {
+  const cats = categories || GUEST_CATEGORIES;
   const rows = (guests || []).map((g) => {
     const aff = getPrimaryAffiliation(g);
     return {
       姓名: g.name || '',
-      類別: GUEST_CATEGORIES[g.category] || g.category || '',
+      類別: cats[g.category] || g.category || '',
       所屬單位: aff.organization,
       職銜: aff.title,
       電郵: g.email || '',
@@ -86,12 +88,13 @@ export function exportGuestDatabaseExcel(guests, prefix) {
   exportExcelRows(rows, `${prefix}_嘉賓資料庫.xlsx`);
 }
 
-export function exportLabelMergeExcel(event, guests, attendance, prefix) {
+export function exportLabelMergeExcel(event, guests, attendance, prefix, categories) {
   const rows = buildAttendanceRows(
     event,
     guests,
     attendance,
-    (a) => ['attending', 'checked_in'].includes(a.status)
+    (a) => ['attending', 'checked_in'].includes(a.status),
+    categories,
   ).map((r) => ({
     姓名: r.姓名,
     單位: r.所屬單位,
@@ -122,12 +125,13 @@ export function importGuestsFromExcel(file) {
   });
 }
 
-export function parseImportedGuestRow(row, generateId, nowISO) {
+export function parseImportedGuestRow(row, generateId, nowISO, categories) {
   const name = row['姓名'] || row.name || row.Name || '';
   if (!name) return null;
 
+  const cats = categories || GUEST_CATEGORIES;
   const categoryMap = Object.fromEntries(
-    Object.entries(GUEST_CATEGORIES).map(([k, v]) => [v, k])
+    Object.entries(cats).map(([k, v]) => [v, k])
   );
   const rawCategory = row['類別'] || row.category || 'other';
   const category = categoryMap[rawCategory] || rawCategory || 'other';

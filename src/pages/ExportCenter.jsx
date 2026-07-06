@@ -23,7 +23,7 @@ const EXPORT_ITEMS = [
 ];
 
 export default function ExportCenter() {
-  const { events, guests, attendance, seatingPlans, settings, showToast } = useApp();
+  const { events, guests, attendance, seatingPlans, settings, showToast, guestCategories } = useApp();
   const [eventId, setEventId] = useState(events[0]?.id || '');
 
   const event = events.find((e) => e.id === eventId);
@@ -34,7 +34,7 @@ export default function ExportCenter() {
     const cfg = EXPORT_FILTERS[key];
     if (!cfg) return;
     try {
-      exportAttendanceExcel(event, guests, attendance, cfg.filter, cfg.label, prefix);
+      exportAttendanceExcel(event, guests, attendance, cfg.filter, cfg.label, prefix, guestCategories);
       showToast(`${cfg.label}已匯出`, 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
@@ -44,7 +44,7 @@ export default function ExportCenter() {
   const handleLabelExport = () => {
     if (!event) { showToast('請先選擇活動', 'warning'); return; }
     try {
-      exportLabelMergeExcel(event, guests, attendance, prefix);
+      exportLabelMergeExcel(event, guests, attendance, prefix, guestCategories);
       showToast('標籤合併列印檔案已匯出', 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
@@ -64,7 +64,7 @@ export default function ExportCenter() {
 
   const handleGuestExport = () => {
     try {
-      exportGuestDatabaseExcel(guests, prefix);
+      exportGuestDatabaseExcel(guests, prefix, guestCategories);
       showToast('嘉賓資料庫已匯出', 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');

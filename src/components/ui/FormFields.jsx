@@ -1,4 +1,4 @@
-import { GUEST_CATEGORIES } from '../../data/constants';
+import { useState } from 'react';
 
 export function FormField({ label, required, children, className = '' }) {
   return (
@@ -34,12 +34,97 @@ export function EventSelect({ events, value, onChange, required, allowEmpty, emp
   );
 }
 
-export function CategorySelect({ value, onChange, required }) {
+const ADD_CATEGORY_VALUE = '__add_category__';
+
+export function CategoryFilterSelect({
+  categories,
+  value,
+  onChange,
+  className = '',
+  emptyLabel = '全部類別',
+}) {
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)} required={required}>
-      {Object.entries(GUEST_CATEGORIES).map(([k, v]) => (
+    <Select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">{emptyLabel}</option>
+      {Object.entries(categories).map(([k, v]) => (
         <option key={k} value={k}>{v}</option>
       ))}
     </Select>
+  );
+}
+
+export function CategorySelect({
+  value,
+  onChange,
+  required,
+  categories,
+  onAddCategory,
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+
+  const handleSelectChange = (e) => {
+    const next = e.target.value;
+    if (next === ADD_CATEGORY_VALUE) {
+      setAdding(true);
+      return;
+    }
+    setAdding(false);
+    onChange(next);
+  };
+
+  const submitNew = () => {
+    const trimmed = newLabel.trim();
+    if (!trimmed) return;
+    const key = onAddCategory?.(trimmed);
+    if (key) {
+      onChange(key);
+      setAdding(false);
+      setNewLabel('');
+    }
+  };
+
+  const cancelAdd = () => {
+    setAdding(false);
+    setNewLabel('');
+  };
+
+  return (
+    <div>
+      <Select
+        value={adding ? ADD_CATEGORY_VALUE : value}
+        onChange={handleSelectChange}
+        required={required && !adding}
+      >
+        {Object.entries(categories).map(([k, v]) => (
+          <option key={k} value={k}>{v}</option>
+        ))}
+        {onAddCategory && <option value={ADD_CATEGORY_VALUE}>＋ 新增類別…</option>}
+      </Select>
+      {adding && (
+        <div className="flex gap-2 mt-2 items-center">
+          <Input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="例：內地"
+            className="flex-1"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitNew();
+              }
+              if (e.key === 'Escape') cancelAdd();
+            }}
+          />
+          <button type="button" className="btn-primary btn-sm shrink-0" onClick={submitNew}>
+            加入
+          </button>
+          <button type="button" className="btn-secondary btn-sm shrink-0" onClick={cancelAdd}>
+            取消
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

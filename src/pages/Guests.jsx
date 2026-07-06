@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { GUEST_CATEGORIES } from '../data/constants';
 import { getPrimaryAffiliation, generateId, nowISO } from '../utils/helpers';
 import { importGuestsFromExcel, parseImportedGuestRow } from '../utils/export';
 import GuestAvatar from '../components/ui/GuestAvatar';
@@ -9,7 +8,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PhotoPicker from '../components/guests/PhotoPicker';
-import { FormField, Input, Select, Textarea, CategorySelect } from '../components/ui/FormFields';
+import { FormField, Input, Select, Textarea, CategorySelect, CategoryFilterSelect } from '../components/ui/FormFields';
 
 const emptyGuest = () => ({
   name: '', photo: '', category: 'other',
@@ -21,7 +20,7 @@ const emptyGuest = () => ({
 });
 
 export default function Guests() {
-  const { guests, addGuest, updateGuest, deleteGuest, deleteGuests, importGuests, showToast } = useApp();
+  const { guests, addGuest, updateGuest, deleteGuest, deleteGuests, importGuests, showToast, guestCategories, addGuestCategory } = useApp();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [orgFilter, setOrgFilter] = useState('');
@@ -147,7 +146,7 @@ export default function Guests() {
     if (!file) return;
     try {
       const rows = await importGuestsFromExcel(file);
-      const parsed = rows.map((r) => parseImportedGuestRow(r, generateId, nowISO)).filter(Boolean);
+      const parsed = rows.map((r) => parseImportedGuestRow(r, generateId, nowISO, guestCategories)).filter(Boolean);
       if (!parsed.length) { showToast('未找到有效嘉賓資料', 'warning'); return; }
       importGuests(parsed);
     } catch { showToast('匯入失敗，請檢查檔案格式', 'error'); }
@@ -173,10 +172,12 @@ export default function Guests() {
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input className="input flex-1" placeholder="搜尋姓名..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="sm:w-40">
-          <option value="">全部類別</option>
-          {Object.entries(GUEST_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </Select>
+        <CategoryFilterSelect
+          categories={guestCategories}
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          className="sm:w-40"
+        />
         <input className="input sm:w-48" placeholder="篩選單位..." value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} />
       </div>
 
@@ -256,7 +257,15 @@ export default function Guests() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <FormField label="姓名" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></FormField>
-            <FormField label="類別" required><CategorySelect value={form.category} onChange={(v) => setForm({ ...form, category: v })} required /></FormField>
+            <FormField label="類別" required>
+              <CategorySelect
+                value={form.category}
+                onChange={(v) => setForm({ ...form, category: v })}
+                categories={guestCategories}
+                onAddCategory={addGuestCategory}
+                required
+              />
+            </FormField>
           </div>
 
           <div className="mb-4">

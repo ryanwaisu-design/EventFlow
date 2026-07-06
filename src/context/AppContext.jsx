@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { loadAllData, saveAllData } from '../data/storage';
 import { generateId, nowISO } from '../utils/helpers';
+import { addCustomGuestCategory, getGuestCategories, removeCustomGuestCategory } from '../utils/guestCategories';
 import { createEmptyPlan, normalizePlan, syncParticipantsFromAttendance, preparePlanForStorage } from '../seating/adapters/planAdapter';
 import { migratePlanToSubEvents } from '../seating/adapters/planSubEvent';
 import { writebackSeatingToAttendance } from '../seating/adapters/writebackAdapter';
@@ -189,6 +190,38 @@ export function AppProvider({ children }) {
     showToast('設定已儲存', 'success');
   }, [persist, showToast]);
 
+  const addGuestCategory = useCallback((label) => {
+    let key = null;
+    let isNew = false;
+    persist((prev) => {
+      const before = prev.settings?.customGuestCategories || {};
+      const result = addCustomGuestCategory(prev.settings, label);
+      if (!result) return prev;
+      key = result.key;
+      const after = result.settings?.customGuestCategories || {};
+      isNew = Boolean(after[key] && !before[key]);
+      if (result.settings !== prev.settings) {
+        return { ...prev, settings: result.settings };
+      }
+      return prev;
+    });
+    if (key && isNew) {
+      showToast(`已新增類別「${label.trim()}」`, 'success');
+    }
+    return key;
+  }, [persist, showToast]);
+
+  const deleteGuestCategory = useCallback((key) => {
+    persist((prev) => {
+      const result = removeCustomGuestCategory(prev.settings, key);
+      if (result.error) return prev;
+      return { ...prev, settings: result.settings };
+    });
+    showToast('已刪除自訂類別', 'success');
+  }, [persist, showToast]);
+
+  const guestCategories = useMemo(() => getGuestCategories(data.settings), [data.settings]);
+
   const restoreBackup = useCallback((backup) => {
     persist(backup);
     showToast('資料已還原', 'success');
@@ -255,6 +288,7 @@ export function AppProvider({ children }) {
       addGuestsToEvent, updateAttendance, bulkUpdateAttendance, removeFromEvent,
       bulkMarkInvited, bulkMarkAttending, bulkMarkDeclined, checkInGuest,
       updateSettings, restoreBackup, getGuestById, getEventById, getEventAttendance,
+      guestCategories, addGuestCategory, deleteGuestCategory,
       getSeatingPlan, ensureSeatingPlan, upsertSeatingPlan, syncSeatingParticipants, commitSeatingPlan,
     }}>
       {children}

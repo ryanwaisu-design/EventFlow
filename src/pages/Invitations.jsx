@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { ATTENDANCE_STATUS, GUEST_CATEGORIES } from '../data/constants';
+import { ATTENDANCE_STATUS } from '../data/constants';
 import { getPrimaryAffiliation, todayISO } from '../utils/helpers';
 import { readInvitationExcel, resolveInvitationGuests } from '../utils/invitationImport';
 import GuestAvatar from '../components/ui/GuestAvatar';
@@ -8,14 +8,14 @@ import CategoryTag from '../components/ui/CategoryTag';
 import StatusBadge from '../components/ui/StatusBadge';
 import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
-import { FormField, Input, Select, Textarea, EventSelect } from '../components/ui/FormFields';
+import { FormField, Input, Select, Textarea, EventSelect, CategoryFilterSelect } from '../components/ui/FormFields';
 
 export default function Invitations() {
   const {
     events, guests, attendance, selectedEventId, setSelectedEventId,
     addGuestsToEvent, updateAttendance, removeFromEvent,
     bulkMarkInvited, bulkMarkAttending, bulkMarkDeclined, getGuestById,
-    navigate, showToast,
+    navigate, showToast, guestCategories,
   } = useApp();
 
   const importFileRef = useRef(null);
@@ -196,10 +196,12 @@ export default function Invitations() {
           <option value="">全部狀態</option>
           {Object.entries(ATTENDANCE_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </Select>
-        <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="lg:w-36">
-          <option value="">全部類別</option>
-          {Object.entries(GUEST_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </Select>
+        <CategoryFilterSelect
+          categories={guestCategories}
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+          className="lg:w-36"
+        />
         <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="lg:w-32">
           <option value="name">按姓名</option>
           <option value="category">按類別</option>
