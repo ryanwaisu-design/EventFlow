@@ -2,9 +2,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getPrimaryAffiliation } from '../utils/helpers';
 import { exportRecognitionWord } from '../utils/export';
+import {
+  findGuestsWithStalePhotoSource,
+  formatStalePhotoSourceMessage,
+} from '../utils/photoSource';
 import GuestAvatar from '../components/ui/GuestAvatar';
 import CategoryTag from '../components/ui/CategoryTag';
 import EmptyState from '../components/ui/EmptyState';
+import ActionDialog from '../components/ui/ActionDialog';
 import { FormField, EventSelect, Input } from '../components/ui/FormFields';
 
 const QUICK_FILTERS = [
@@ -21,6 +26,7 @@ export default function Recognition() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [printMode, setPrintMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
+  const [stalePhotoDialog, setStalePhotoDialog] = useState(null);
 
   const eventId = selectedEventId || events[0]?.id || '';
   const event = events.find((e) => e.id === eventId);
@@ -66,6 +72,12 @@ export default function Recognition() {
     }
   };
 
+  const runRecognitionExport = async (guestIds) => {
+    showToast('正在產生 Word 檔案…', 'info');
+    await exportRecognitionWord(event, guests, attendance, { guestIds });
+    showToast(`已匯出 ${guestIds.length} 位嘉賓的認人名單`, 'success');
+  };
+
   const handleExportWord = async () => {
     if (!event) { showToast('請選擇活動', 'warning'); return; }
     if (selectedIds.length === 0) {
@@ -73,9 +85,12 @@ export default function Recognition() {
       return;
     }
     try {
-      showToast('正在產生 Word 檔案…', 'info');
-      await exportRecognitionWord(event, guests, attendance, { guestIds: selectedIds });
-      showToast(`已匯出 ${selectedIds.length} 位嘉賓的認人名單`, 'success');
+      const stale = findGuestsWithStalePhotoSource(guests, { guestIds: selectedIds });
+      if (stale.length) {
+        setStalePhotoDialog({ guestIds: selectedIds, stale });
+        return;
+      }
+      await runRecognitionExport(selectedIds);
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
     }
@@ -201,6 +216,28 @@ export default function Recognition() {
           })}
         </div>
       )}
+
+      <ActionDialog
+        open={!!stalePhotoDialog}
+        onClose={() => setStalePhotoDialog(null)}
+        title="相片來源日期提醒"
+        message={stalePhotoDialog ? formatStalePhotoSourceMessage(stalePhotoDialog.stale) : ''}
+        actions={[
+          {
+            label: '仍要匯出',
+            variant: 'primary',
+            onClick: async () => {
+              if (!stalePhotoDialog) return;
+              try {
+                await runRecognitionExport(stalePhotoDialog.guestIds);
+              } catch (e) {
+                showToast(e.message || '匯出失敗', 'error');
+              }
+            },
+          },
+          { label: '取消', variant: 'secondary', onClick: () => {} },
+        ]}
+      />
     </div>
   );
 }

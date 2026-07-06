@@ -9,6 +9,11 @@ import {
 } from '../utils/export';
 import { exportBackup } from '../data/storage';
 import { downloadText } from '../utils/helpers';
+import {
+  findGuestsWithStalePhotoSource,
+  formatStalePhotoSourceMessage,
+} from '../utils/photoSource';
+import ActionDialog from '../components/ui/ActionDialog';
 import { FormField, EventSelect } from '../components/ui/FormFields';
 
 const EXPORT_ITEMS = [
@@ -25,9 +30,20 @@ const EXPORT_ITEMS = [
 export default function ExportCenter() {
   const { events, guests, attendance, seatingPlans, settings, showToast, guestCategories } = useApp();
   const [eventId, setEventId] = useState(events[0]?.id || '');
+  const [stalePhotoDialog, setStalePhotoDialog] = useState(null);
 
   const event = events.find((e) => e.id === eventId);
   const prefix = settings.exportPrefix || 'EventFlow';
+
+  const recognitionGuestIds = (ev) => (attendance || [])
+    .filter((a) => a.eventId === ev?.id && ['attending', 'checked_in'].includes(a.status))
+    .map((a) => a.guestId);
+
+  const runRecognitionExport = async () => {
+    showToast('正在產生 Word 檔案…', 'info');
+    await exportRecognitionWord(event, guests, attendance);
+    showToast('認人名單已匯出', 'success');
+  };
 
   const handleAttendanceExport = (key) => {
     if (!event) { showToast('請先選擇活動', 'warning'); return; }
@@ -54,9 +70,13 @@ export default function ExportCenter() {
   const handleWordExport = async () => {
     if (!event) { showToast('請先選擇活動', 'warning'); return; }
     try {
-      showToast('正在產生 Word 檔案…', 'info');
-      await exportRecognitionWord(event, guests, attendance);
-      showToast('認人名單已匯出', 'success');
+      const guestIds = recognitionGuestIds(event);
+      const stale = findGuestsWithStalePhotoSource(guests, { guestIds });
+      if (stale.length) {
+        setStalePhotoDialog({ stale });
+        return;
+      }
+      await runRecognitionExport();
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
     }
@@ -126,6 +146,27 @@ export default function ExportCenter() {
           </button>
         </div>
       </section>
+
+      <ActionDialog
+        open={!!stalePhotoDialog}
+        onClose={() => setStalePhotoDialog(null)}
+        title="相片來源日期提醒"
+        message={stalePhotoDialog ? formatStalePhotoSourceMessage(stalePhotoDialog.stale) : ''}
+        actions={[
+          {
+            label: '仍要匯出',
+            variant: 'primary',
+            onClick: async () => {
+              try {
+                await runRecognitionExport();
+              } catch (e) {
+                showToast(e.message || '匯出失敗', 'error');
+              }
+            },
+          },
+          { label: '取消', variant: 'secondary', onClick: () => {} },
+        ]}
+      />
     </div>
   );
 }

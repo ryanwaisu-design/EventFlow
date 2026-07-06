@@ -7,8 +7,14 @@ import CategoryTag from '../components/ui/CategoryTag';
 import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import ActionDialog from '../components/ui/ActionDialog';
 import PhotoPicker from '../components/guests/PhotoPicker';
 import { FormField, Input, Select, Textarea, CategorySelect, CategoryFilterSelect } from '../components/ui/FormFields';
+import {
+  findExistingDuplicateNames,
+  analyzeImportDuplicateNames,
+  formatDuplicateNamesMessage,
+} from '../utils/guestDuplicates';
 
 const emptyGuest = () => ({
   name: '', photo: '', category: 'other',
@@ -31,6 +37,7 @@ export default function Guests() {
   const [selected, setSelected] = useState(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [duplicateDialog, setDuplicateDialog] = useState(null);
   const fileRef = useRef(null);
 
   const filtered = useMemo(() => {
@@ -124,6 +131,12 @@ export default function Guests() {
     });
   };
 
+  const saveGuest = (data) => {
+    if (editing) updateGuest(editing.id, data);
+    else addGuest(data);
+    setModalOpen(false);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name?.trim()) { showToast('請填寫姓名', 'error'); return; }
@@ -136,9 +149,14 @@ export default function Guests() {
       name: form.name.trim(),
       tags: typeof form.tags === 'string' ? form.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : form.tags,
     };
-    if (editing) updateGuest(editing.id, data);
-    else addGuest(data);
-    setModalOpen(false);
+    if (!editing) {
+      const dupes = findExistingDuplicateNames([data.name], guests);
+      if (dupes.length) {
+        setDuplicateDialog({ kind: 'add', data, names: dupes });
+        return;
+      }
+    }
+    saveGuest(data);
   };
 
   const handleImport = async (e) => {
@@ -148,9 +166,24 @@ export default function Guests() {
       const rows = await importGuestsFromExcel(file);
       const parsed = rows.map((r) => parseImportedGuestRow(r, generateId, nowISO, guestCategories)).filter(Boolean);
       if (!parsed.length) { showToast('未找到有效嘉賓資料', 'warning'); return; }
+      const { all } = analyzeImportDuplicateNames(parsed, guests);
+      if (all.length) {
+        setDuplicateDialog({ kind: 'import', guests: parsed, names: all });
+        return;
+      }
       importGuests(parsed);
     } catch { showToast('匯入失敗，請檢查檔案格式', 'error'); }
     e.target.value = '';
+  };
+
+  const handleDuplicateKeepBoth = () => {
+    if (!duplicateDialog) return;
+    if (duplicateDialog.kind === 'add') saveGuest(duplicateDialog.data);
+    else importGuests(duplicateDialog.guests);
+  };
+
+  const handleDuplicateCancel = () => {
+    if (duplicateDialog?.kind === 'add') setModalOpen(false);
   };
 
   return (
@@ -310,6 +343,24 @@ export default function Guests() {
           </div>
         </form>
       </Modal>
+
+      <ActionDialog
+        open={!!duplicateDialog}
+        onClose={() => setDuplicateDialog(null)}
+        title="發現重複姓名"
+        message={
+          duplicateDialog
+            ? formatDuplicateNamesMessage(duplicateDialog.names, {
+              action: duplicateDialog.kind === 'import' ? '匯入' : '新增',
+            })
+            : ''
+        }
+        actions={[
+          { label: '兩者皆保留', variant: 'primary', onClick: handleDuplicateKeepBoth },
+          { label: '取消', variant: 'secondary', onClick: handleDuplicateCancel },
+          { label: '返回', variant: 'secondary', onClick: () => {} },
+        ]}
+      />
 
       <ConfirmDialog
         open={!!deleteId}
