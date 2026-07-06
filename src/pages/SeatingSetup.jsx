@@ -14,6 +14,7 @@ import SubEventSetupPanel from '../components/seating/SubEventSetupPanel';
 import GuestSubEventMatrix from '../components/seating/GuestSubEventMatrix';
 import EmptyState from '../components/ui/EmptyState';
 import { FormField, Input, Select } from '../components/ui/FormFields';
+import VipLoungeCanvas from '../seating/components/seating/VipLoungeCanvas';
 
 const VENUE_TYPES = [
   { id: 'banquet', label: '宴會', desc: '主桌 + 圓桌 / 長桌' },
@@ -280,6 +281,13 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
     saveSnapshot,
     getPlan,
     replacePlan,
+    setVipLoungeEnabled,
+    addVipSeat,
+    addVipTable,
+    addVipChair,
+    removeVipItem,
+    moveVipItem,
+    alignVipItems,
   } = useSeatingWorkspaceStore();
   const [isEntering, startTransition] = useTransition();
   const [guestMatrixOpen, setGuestMatrixOpen] = useState(true);
@@ -694,6 +702,42 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
         </div>
 
         {renderVenueForm()}
+      </div>
+
+      <div className="card p-5 sm:p-6">
+        <ConfigSection
+          title="VIP 休息室"
+          description="可選獨立休息區；每子活動各自布置。勾選嘉賓矩陣中的 VIP 欄後，方可排入休息室座位。"
+        >
+          <CheckRow
+            checked={Boolean(plan.vipLounge?.enabled)}
+            onChange={(v) => setVipLoungeEnabled(v)}
+            label="此子活動需要 VIP 休息室"
+          >
+            {plan.vipLounge?.enabled && (
+              <VipLoungeCanvas
+                items={plan.vipLounge?.items ?? []}
+                seats={plan.seats}
+                assignments={plan.assignments}
+                guests={seatingGuests}
+                showTooltip={false}
+                layoutMode
+                toolbarMode="layout"
+                selectedSeatId={null}
+                highlightGuestIds={[]}
+                dragDisabled={false}
+                dndEnabled={false}
+                onSeatClick={() => {}}
+                onMoveItem={moveVipItem}
+                onRemoveItem={removeVipItem}
+                onAddSeat={addVipSeat}
+                onAddTable={addVipTable}
+                onAddChair={addVipChair}
+                onAlignItems={alignVipItems}
+              />
+            )}
+          </CheckRow>
+        </ConfigSection>
       </div>
 
       {/* 底部操作 */}

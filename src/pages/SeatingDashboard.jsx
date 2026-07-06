@@ -23,6 +23,8 @@ import {
   ChevronDown,
   Plus,
   AlignHorizontalSpaceBetween,
+  LayoutGrid,
+  Wine,
 } from 'lucide-react';
 import Modal from '../components/ui/Modal';
 import { useApp } from '../context/AppContext';
@@ -30,6 +32,7 @@ import { toSeatingGuests } from '../seating/adapters/guestAdapter';
 import { useSeatingWorkspaceStore } from '../seating/store/seatingWorkspaceStore';
 import { useHistoryStore } from '../seating/store/historyStore';
 import SeatingChart from '../seating/components/seating/SeatingChart';
+import VipLoungeCanvas from '../seating/components/seating/VipLoungeCanvas';
 import PanZoomCanvas, { scrollHighlightIntoView } from '../seating/components/PanZoomCanvas';
 import { useUnsavedGuard } from '../seating/hooks/useUnsavedGuard';
 import {
@@ -47,6 +50,7 @@ import {
   participantGuests,
   isAudienceSeat,
   isStageSeat,
+  isVipSeat,
   quotaDenyMessage,
 } from '../seating/utils/guestSeats';
 import { buildSeatingView } from '../seating/utils/seatingView';
@@ -85,6 +89,12 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
     setCurrentSubEvent,
     addSubEvent,
     toggleRowAisleBreak,
+    addVipSeat,
+    addVipTable,
+    addVipChair,
+    removeVipItem,
+    moveVipItem,
+    alignVipItems,
   } = useSeatingWorkspaceStore();
 
   const { push, undo, redo, canUndo, canRedo, clear: clearHistory } = useHistoryStore();
@@ -264,6 +274,11 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
     [plan, seatingMode],
   );
 
+  const hasVipLounge = useMemo(
+    () => Boolean(plan?.vipLounge?.enabled),
+    [plan?.vipLounge?.enabled],
+  );
+
   const hasStageSeating = useMemo(
     () => plan?.seats?.some((s) => s.zone === 'stage') ?? false,
     [plan?.seats],
@@ -299,10 +314,14 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
   const participationSeat = (guestId, mode) => {
     const p = plan.participations[guestId];
     if (!p) return null;
-    return mode === 'stage' ? p.stageSeat : p.audienceSeat;
+    return mode === 'stage' ? p.stageSeat : mode === 'vip' ? p.vipSeat : p.audienceSeat;
   };
 
-  const isDragDisabled = toolbarMode === 'lock' || toolbarMode === 'renumber' || toolbarMode === 'aisle';
+  const isDragDisabled =
+    toolbarMode === 'lock' ||
+    toolbarMode === 'renumber' ||
+    toolbarMode === 'aisle' ||
+    toolbarMode === 'layout';
 
   const showQuotaMessage = (msg) => {
     setQuotaMessage(msg);
@@ -381,17 +400,20 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
 
     if (assignment.locked) return;
     const isStage = seatingMode === 'stage';
+    const isVip = seatingMode === 'vip';
     if (isStage && !isStageSeat(seat)) return;
-    if (!isStage && !isAudienceSeat(seat)) return;
+    if (isVip && !isVipSeat(seat)) return;
+    if (!isStage && !isVip && !isAudienceSeat(seat)) return;
 
     if (selectedGuestId) {
       const guest = guests.find((g) => g.id === selectedGuestId);
       if (!canAssignGuestToSeat(seatingCtx, seatId, selectedGuestId)) {
         if (guest) {
+          const zone = isStage ? 'stage' : isVip ? 'vip' : 'floor';
           showQuotaMessage(
             quotaDenyMessage(
               guest,
-              isStage ? 'stage' : 'floor',
+              zone,
               seatingCtx.participations[guest.id],
             ),
           );
@@ -608,6 +630,28 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
               <span>走道</span>
             </button>
           )}
+          {hasVipLounge && (
+            <button
+              type="button"
+              className={`btn btn-sm ${toolbarMode === 'layout' ? 'btn-aisle-active' : 'btn-secondary'}`}
+              onClick={() => {
+                setSeatingMode('vip');
+                setToolbarMode((m) => {
+                  const next = m === 'layout' ? 'normal' : 'layout';
+                  if (next === 'layout') {
+                    setSelectedGuestId(null);
+                    setSelectedSeatId(null);
+                    setAislePickSeatId(null);
+                  }
+                  return next;
+                });
+              }}
+              title="拖曳調整 VIP 休息室座位與茶几"
+            >
+              <LayoutGrid size={16} />
+              <span>編輯布局</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -654,6 +698,19 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
         </div>
       </div>
 
+      {toolbarMode === 'layout' && (
+        <div className="renumber-mode-banner aisle-mode-banner no-print">
+          <span>編輯布局：拖曳座位或茶几調整位置；可新增或刪除項目</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setToolbarMode('normal')}
+          >
+            完成
+          </button>
+        </div>
+      )}
+
       {toolbarMode === 'aisle' && (
         <div className="renumber-mode-banner aisle-mode-banner no-print">
           <span>
@@ -694,14 +751,21 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
 
       <div className="dashboard-body">
         <aside className="guest-panel no-print">
-          {hasStageSeating && (
+          {(hasStageSeating || hasVipLounge) && (
             <div className="mode-tabs">
-              <button type="button" className={`mode-tab ${seatingMode === 'audience' ? 'active' : ''}`} onClick={() => { setSeatingMode('audience'); setSelectedGuestId(null); }}>
+              <button type="button" className={`mode-tab ${seatingMode === 'audience' ? 'active' : ''}`} onClick={() => { setSeatingMode('audience'); setToolbarMode('normal'); setSelectedGuestId(null); }}>
                 <Users size={14} /> 台下排位
               </button>
-              <button type="button" className={`mode-tab ${seatingMode === 'stage' ? 'active' : ''}`} onClick={() => { setSeatingMode('stage'); setSelectedGuestId(null); }}>
-                <Mic2 size={14} /> 台上排位
-              </button>
+              {hasStageSeating && (
+                <button type="button" className={`mode-tab ${seatingMode === 'stage' ? 'active' : ''}`} onClick={() => { setSeatingMode('stage'); setToolbarMode('normal'); setSelectedGuestId(null); }}>
+                  <Mic2 size={14} /> 台上排位
+                </button>
+              )}
+              {hasVipLounge && (
+                <button type="button" className={`mode-tab ${seatingMode === 'vip' ? 'active' : ''}`} onClick={() => { setSeatingMode('vip'); setToolbarMode('normal'); setSelectedGuestId(null); }}>
+                  <Wine size={14} /> VIP 休息室
+                </button>
+              )}
             </div>
           )}
 
@@ -782,6 +846,9 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
                             {quota.stage.full && seatingMode === 'stage' && (
                               <em className="quota-full-badge">已排滿</em>
                             )}
+                            {quota.vip.full && seatingMode === 'vip' && (
+                              <em className="quota-full-badge">已排滿</em>
+                            )}
                           </strong>
                           <span>{renderGuestQuotaMeta(g)}</span>
                         </li>
@@ -797,7 +864,9 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
         <div className="chart-panel">
           <div className="chart-panel-header no-print">
             <div className="chart-seat-stats">
-              <span className="chart-seat-stats-mode">{seatingMode === 'stage' ? '台上' : '台下'}</span>
+              <span className="chart-seat-stats-mode">
+                {seatingMode === 'stage' ? '台上' : seatingMode === 'vip' ? 'VIP' : '台下'}
+              </span>
               <span className="chart-seat-stats-value">
                 <strong>{seatStats.assigned}</strong>
                 <span className="chart-seat-stats-sep">/</span>
@@ -832,28 +901,68 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
                   }
                 }}
               >
-                <SeatingChart
-                  view={seatingView}
-                  plan={plan}
-                  selectedSeatId={selectedSeatId}
-                  highlightGuestIds={highlightGuestIds}
-                  seatingMode={seatingMode}
-                  toolbarMode={toolbarMode}
-                  dragDisabled={isDragDisabled}
-                  dndEnabled={dndReady && toolbarMode === 'normal'}
-                  guestQuotaByGuestId={guestQuotaByGuestId}
-                  aislePickSeatId={aislePickSeatId}
-                  onSeatClick={handleSeatClick}
-                  onTableClick={handleTableClick}
-                  onRemoveGuest={(seatId, e) => {
-                    e.stopPropagation();
-                    if (toolbarMode !== 'normal') return;
-                    const assignment = plan.assignments[seatId];
-                    if (!assignment?.guestId || assignment.locked) return;
-                    recordHistory();
-                    assignGuest(seatId, null);
-                  }}
-                />
+                <div className="seating-chart" id="seating-chart-export">
+                  {seatingMode === 'vip' && hasVipLounge ? (
+                    <div className="seating-zone vip-zone">
+                      <h3 className="zone-label">
+                        VIP 休息室 {toolbarMode === 'layout' && <em className="mode-badge">編輯布局</em>}
+                        {seatingMode === 'vip' && toolbarMode === 'normal' && <em className="mode-badge">編輯中</em>}
+                      </h3>
+                      <VipLoungeCanvas
+                        items={plan.vipLounge?.items ?? []}
+                        seats={plan.seats}
+                        assignments={plan.assignments}
+                        guests={guests}
+                        showTooltip={plan.showTooltip}
+                        layoutMode={toolbarMode === 'layout'}
+                        toolbarMode={toolbarMode}
+                        selectedSeatId={selectedSeatId}
+                        highlightGuestIds={highlightGuestIds}
+                        guestQuotaByGuestId={guestQuotaByGuestId}
+                        dragDisabled={isDragDisabled}
+                        dndEnabled={dndReady && toolbarMode === 'normal'}
+                        onSeatClick={handleSeatClick}
+                        onRemoveGuest={(seatId, e) => {
+                          e.stopPropagation();
+                          if (toolbarMode !== 'normal') return;
+                          const assignment = plan.assignments[seatId];
+                          if (!assignment?.guestId || assignment.locked) return;
+                          recordHistory();
+                          assignGuest(seatId, null);
+                        }}
+                        onMoveItem={moveVipItem}
+                        onRemoveItem={removeVipItem}
+                        onAddSeat={addVipSeat}
+                        onAddTable={addVipTable}
+                        onAddChair={addVipChair}
+                        onAlignItems={alignVipItems}
+                      />
+                    </div>
+                  ) : (
+                    <SeatingChart
+                      view={seatingView}
+                      plan={plan}
+                      selectedSeatId={selectedSeatId}
+                      highlightGuestIds={highlightGuestIds}
+                      seatingMode={seatingMode}
+                      toolbarMode={toolbarMode}
+                      dragDisabled={isDragDisabled}
+                      dndEnabled={dndReady && toolbarMode === 'normal'}
+                      guestQuotaByGuestId={guestQuotaByGuestId}
+                      aislePickSeatId={aislePickSeatId}
+                      onSeatClick={handleSeatClick}
+                      onTableClick={handleTableClick}
+                      onRemoveGuest={(seatId, e) => {
+                        e.stopPropagation();
+                        if (toolbarMode !== 'normal') return;
+                        const assignment = plan.assignments[seatId];
+                        if (!assignment?.guestId || assignment.locked) return;
+                        recordHistory();
+                        assignGuest(seatId, null);
+                      }}
+                    />
+                  )}
+                </div>
                 <DragOverlay>{dragGuestName && <div className="drag-overlay">{dragGuestName}</div>}</DragOverlay>
               </DndContext>
             ) : (

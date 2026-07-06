@@ -9,6 +9,9 @@ import type {
   SubEvent,
   VenueConfig,
   VenueType,
+  VipLoungeConfig,
+  VipLoungeItem,
+  VipLoungeTableShape,
 } from '../types';
 import {
   addGuestToSubEvents,
@@ -20,6 +23,7 @@ import {
   pickSubFields,
   reorderSubEvents,
   setGuestSubEventAttendeeCount,
+  setGuestVipEligible,
   setSubEventParticipationBulk,
   sortSubEventsBySchedule,
   syncFlatToSubEvents,
@@ -37,6 +41,15 @@ import {
   toggleRowAisleBreakOnConfig,
 } from '../utils/rowAisle';
 import { canAssignGuestToSeat } from '../utils/guestSeats';
+import {
+  createVipChairItem,
+  createVipSeatItem,
+  createVipTableItem,
+  defaultVipLounge,
+  normalizeVipLounge,
+  syncSubEventVipLounge,
+} from '../utils/vipLounge';
+import { alignVipItems as alignVipItemsUtil, type VipAlignMode } from '../utils/vipLoungeLayout';
 import { MAIN_TABLE_KEY, parseFloorTableKey } from '../utils/tableNumber';
 import {
   applyPlanAssignments,
@@ -130,6 +143,17 @@ function longTableSideMeta(
   }
 }
 
+function touchVipLounge(plan: SeatingPlan, vipLounge: VipLoungeConfig): SeatingPlan {
+  const synced = syncFlatToSubEvents({ ...plan, vipLounge });
+  const currentId = synced.currentSubEventId ?? synced.subEvents[0]?.id;
+  const subEvents = synced.subEvents.map((s: SubEvent) =>
+    s.id === currentId ? syncSubEventVipLounge({ ...s, vipLounge }) : s,
+  );
+  const current = subEvents.find((s: SubEvent) => s.id === currentId) ?? subEvents[0];
+  if (!current) return touch(synced);
+  return touch({ ...synced, subEvents, ...pickSubFields(current) });
+}
+
 function snapshotPlan(plan: SeatingPlan): string {
   return JSON.stringify({
     venueType: plan.venueType,
@@ -141,6 +165,7 @@ function snapshotPlan(plan: SeatingPlan): string {
     participantGuestIds: plan.participantGuestIds,
     showTooltip: plan.showTooltip,
     step: plan.step,
+    vipLounge: plan.vipLounge,
   });
 }
 
@@ -191,7 +216,16 @@ interface SeatingWorkspaceStore {
   copySubEventVenue: (fromSubEventId: string) => boolean;
   setGuestSubEvents: (guestId: string, subEventIds: string[]) => void;
   setGuestSubEventAttendeeCount: (guestId: string, subEventId: string, count: number) => void;
+  setGuestVipEligible: (guestId: string, subEventId: string, eligible: boolean) => void;
   toggleSubEventForAllGuests: (subEventId: string, participate: boolean) => void;
+
+  setVipLoungeEnabled: (enabled: boolean) => void;
+  addVipSeat: () => void;
+  addVipTable: (shape?: VipLoungeTableShape) => void;
+  addVipChair: () => void;
+  removeVipItem: (itemId: string) => void;
+  moveVipItem: (itemId: string, x: number, y: number) => void;
+  alignVipItems: (itemIds: string[], mode: VipAlignMode) => void;
 }
 
 export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get) => ({
@@ -419,10 +453,12 @@ export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get)
       if (!p) continue;
       const lockedAudience = p.audienceSeat && assignments[p.audienceSeat]?.locked;
       const lockedStage = p.stageSeat && assignments[p.stageSeat]?.locked;
+      const lockedVip = p.vipSeat && assignments[p.vipSeat]?.locked;
       participations[guestId] = {
         ...p,
         audienceSeat: lockedAudience ? p.audienceSeat : null,
         stageSeat: lockedStage ? p.stageSeat : null,
+        vipSeat: lockedVip ? p.vipSeat : null,
       };
     }
     set({ plan: touch(syncParticipationSeatRefs({ ...plan, assignments, participations })) });
@@ -712,6 +748,7 @@ export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get)
         seats: updated.seats,
         assignments: updated.assignments,
         participations: updated.participations,
+        vipLounge: updated.vipLounge,
       }),
     });
     return true;
@@ -756,6 +793,90 @@ export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get)
         assignments: current.assignments,
       }),
     });
+  },
+
+  setGuestVipEligible: (guestId, subEventId, eligible) => {
+    const plan = get().plan;
+    if (!plan) return;
+    const synced = syncFlatToSubEvents(plan);
+    const subEvents = setGuestVipEligible(synced.subEvents, subEventId, guestId, eligible);
+    const current = getCurrentSubFromPlan({ ...synced, subEvents });
+    if (!current) return;
+    set({
+      plan: touch({
+        ...synced,
+        subEvents,
+        participantGuestIds: current.participantGuestIds,
+        participations: current.participations,
+        assignments: current.assignments,
+        seats: current.seats,
+        vipLounge: current.vipLounge,
+      }),
+    });
+  },
+
+  setVipLoungeEnabled: (enabled) => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = {
+      ...normalizeVipLounge(plan.vipLounge),
+      enabled,
+      items: enabled ? normalizeVipLounge(plan.vipLounge).items : [],
+    };
+    set({ plan: touchVipLounge(plan, vipLounge) });
+  },
+
+  addVipSeat: () => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    if (!vipLounge.enabled) return;
+    const items = [...vipLounge.items, createVipSeatItem(120, 120, vipLounge.items)];
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
+  },
+
+  addVipTable: (shape = 'coffee') => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    if (!vipLounge.enabled) return;
+    const items = [...vipLounge.items, createVipTableItem(220, 160, shape)];
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
+  },
+
+  addVipChair: () => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    if (!vipLounge.enabled) return;
+    const items = [...vipLounge.items, createVipChairItem(200, 140)];
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
+  },
+
+  removeVipItem: (itemId) => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    const items = vipLounge.items.filter((i) => i.id !== itemId);
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
+  },
+
+  moveVipItem: (itemId, x, y) => {
+    const plan = get().plan;
+    if (!plan) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    const items = vipLounge.items.map((item) =>
+      item.id === itemId ? { ...item, x: Math.round(x), y: Math.round(y) } : item,
+    );
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
+  },
+
+  alignVipItems: (itemIds, mode) => {
+    const plan = get().plan;
+    if (!plan || itemIds.length < 2) return;
+    const vipLounge = normalizeVipLounge(plan.vipLounge);
+    const items = alignVipItemsUtil(vipLounge.items, itemIds, mode);
+    set({ plan: touchVipLounge(plan, { ...vipLounge, items }) });
   },
 
   toggleSubEventForAllGuests: (subEventId, participate) => {

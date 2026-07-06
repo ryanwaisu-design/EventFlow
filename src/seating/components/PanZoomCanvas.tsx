@@ -22,7 +22,7 @@ export default function PanZoomCanvas({ children, className = '' }: PanZoomCanva
     const target = e.target as HTMLElement;
     if (
       target.closest(
-        '.seat-cell, .banquet-seat-node, button, input, select, a, .adjust-btns, .row-controls, .table-seat-controls',
+        '.seat-cell, .banquet-seat-node, button, input, select, a, .adjust-btns, .row-controls, .table-seat-controls, .vip-lounge-item--layout, .vip-lounge-toolbar',
       )
     ) {
       return;

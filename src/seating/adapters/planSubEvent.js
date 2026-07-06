@@ -1,10 +1,12 @@
 import { generateId, nowISO } from '../../utils/helpers';
 import { defaultParticipation, defaultVenueConfig, normalizeParticipation } from '../types';
 import { generateAssignments, generateSeats, mergeAssignments } from '../utils/seatGenerator';
+import { defaultVipLounge, normalizeVipLounge, syncSubEventVipLounge } from '../utils/vipLounge';
 
 const SUB_FIELDS = [
   'name', 'date', 'time', 'location',
   'venueType', 'venueConfig', 'seats', 'assignments', 'showTooltip', 'customTableNumbers',
+  'vipLounge',
   'participantGuestIds', 'participations', 'step',
 ];
 
@@ -35,6 +37,7 @@ export function createSubEvent(partial = {}) {
     participantGuestIds: [],
     participations: {},
     step: 'setup',
+    vipLounge: defaultVipLounge(),
   };
 }
 
@@ -51,7 +54,7 @@ export function normalizeSubEvent(sub) {
   const assignments = sub.assignments && Object.keys(sub.assignments).length
     ? sub.assignments
     : generateAssignments(seats);
-  return {
+  return syncSubEventVipLounge({
     ...sub,
     name: sub.name ?? '子活動',
     date: sub.date ?? '',
@@ -66,7 +69,8 @@ export function normalizeSubEvent(sub) {
     participantGuestIds: sub.participantGuestIds ?? [],
     showTooltip: sub.showTooltip ?? true,
     step: sub.step ?? 'setup',
-  };
+    vipLounge: normalizeVipLounge(sub.vipLounge),
+  });
 }
 
 export function normalizePlanSubEvents(plan) {
@@ -200,22 +204,27 @@ export function syncParticipationSeatRefs(sub) {
   for (const guestId of sub.participantGuestIds) {
     let audienceSeat = null;
     let stageSeat = null;
+    let vipSeat = null;
     for (const seat of sub.seats) {
       const assignment = sub.assignments[seat.id];
       if (assignment?.guestId !== guestId) continue;
       if (seat.zone === 'stage') stageSeat = seat.id;
+      else if (seat.zone === 'vip') vipSeat = seat.id;
       else if (!audienceSeat) audienceSeat = seat.id;
     }
     const prev = participations[guestId] ?? defaultParticipation(guestId);
-    participations[guestId] = { ...prev, audienceSeat, stageSeat };
+    participations[guestId] = { ...prev, audienceSeat, stageSeat, vipSeat };
   }
   return { ...sub, participations };
 }
 
 export function applySubEventVenueConfig(sub, venueConfig) {
-  const seats = generateSeats(venueConfig);
-  const assignments = mergeAssignments(seats, sub.assignments);
-  return syncParticipationSeatRefs({ ...sub, venueConfig, seats, assignments });
+  const synced = syncSubEventVipLounge(sub);
+  const vipSeats = synced.seats.filter((s) => s.zone === 'vip');
+  const generated = generateSeats(venueConfig);
+  const seats = [...generated, ...vipSeats];
+  const assignments = mergeAssignments(seats, synced.assignments);
+  return syncParticipationSeatRefs({ ...synced, venueConfig, seats, assignments });
 }
 
 export function regenerateSubEventSeats(sub, force) {
@@ -228,6 +237,7 @@ export function regenerateSubEventSeats(sub, force) {
       ...(sub.participations[guestId] ?? defaultParticipation(guestId)),
       audienceSeat: null,
       stageSeat: null,
+      vipSeat: null,
     };
   }
   return {
@@ -322,7 +332,37 @@ export function setSubEventParticipationBulk(subEvents, subEventId, guestIds, pa
   });
 }
 
+export function setGuestVipEligible(subEvents, subEventId, guestId, eligible) {
+  return subEvents.map((sub) => {
+    if (sub.id !== subEventId) return sub;
+    if (!sub.participantGuestIds.includes(guestId)) return sub;
+    const prev = sub.participations[guestId] ?? defaultParticipation(guestId);
+    const participations = {
+      ...sub.participations,
+      [guestId]: { ...prev, vipEligible: Boolean(eligible) },
+    };
+    if (eligible) return { ...sub, participations };
+    const assignments = { ...sub.assignments };
+    Object.keys(assignments).forEach((seatId) => {
+      const seat = sub.seats.find((s) => s.id === seatId);
+      if (seat?.zone === 'vip' && assignments[seatId].guestId === guestId) {
+        assignments[seatId] = { ...assignments[seatId], guestId: null };
+      }
+    });
+    return syncParticipationSeatRefs({
+      ...sub,
+      participations: {
+        ...participations,
+        [guestId]: { ...participations[guestId], vipSeat: null },
+      },
+      assignments,
+    });
+  });
+}
+
 export function copySubEventVenueConfig(source, target) {
   const venueConfig = structuredClone(source.venueConfig);
-  return applySubEventVenueConfig({ ...target, venueType: source.venueType }, venueConfig);
+  const vipLounge = structuredClone(normalizeVipLounge(source.vipLounge));
+  const withVenue = applySubEventVenueConfig({ ...target, venueType: source.venueType, vipLounge }, venueConfig);
+  return syncSubEventVipLounge(withVenue);
 }

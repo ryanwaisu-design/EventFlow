@@ -13,7 +13,7 @@ interface SeatCellProps {
   selected: boolean;
   highlighted: boolean;
   locked: boolean;
-  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle';
+  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle' | 'layout';
   dragDisabled: boolean;
   dndEnabled?: boolean;
   aislePick?: boolean;
@@ -48,7 +48,13 @@ function SeatCellCore({
 }) {
   const displayNum = seat.customNumber ?? seat.displayNumber;
   const zoneClass =
-    seat.zone === 'stage' ? 'seat-stage' : seat.zone === 'main' ? 'seat-main' : 'seat-floor';
+    seat.zone === 'stage'
+      ? 'seat-stage'
+      : seat.zone === 'vip'
+        ? 'seat-vip'
+        : seat.zone === 'main'
+          ? 'seat-main'
+          : 'seat-floor';
 
   return (
     <div

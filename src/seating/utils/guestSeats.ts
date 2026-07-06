@@ -1,8 +1,8 @@
 import type { Guest, GuestParticipation, Seat, SeatAssignment, SeatingPlan } from '../types';
 import { defaultParticipation } from './planUtils';
 
-export type QuotaZone = 'floor' | 'stage';
-export type SeatingMode = 'audience' | 'stage';
+export type QuotaZone = 'floor' | 'stage' | 'vip';
+export type SeatingMode = 'audience' | 'stage' | 'vip';
 
 /** 單一排位方案的上下文 */
 export interface SeatingContext {
@@ -42,7 +42,11 @@ export function isStageSeat(seat: Seat): boolean {
 }
 
 export function isAudienceSeat(seat: Seat): boolean {
-  return seat.zone !== 'stage';
+  return seat.zone !== 'stage' && seat.zone !== 'vip';
+}
+
+export function isVipSeat(seat: Seat): boolean {
+  return seat.zone === 'vip';
 }
 
 export interface SeatOccupancyStats {
@@ -55,7 +59,11 @@ export function getSeatOccupancyStats(
   assignments: Record<string, SeatAssignment>,
   seats: Seat[],
 ): SeatOccupancyStats {
-  const relevant = seats.filter((s) => (mode === 'stage' ? isStageSeat(s) : isAudienceSeat(s)));
+  const relevant = seats.filter((s) => {
+    if (mode === 'stage') return isStageSeat(s);
+    if (mode === 'vip') return isVipSeat(s);
+    return isAudienceSeat(s);
+  });
   const assigned = relevant.filter((s) => assignments[s.id]?.guestId).length;
   return { assigned, total: relevant.length };
 }
@@ -63,9 +71,12 @@ export function getSeatOccupancyStats(
 export interface GuestSeatIndex {
   floorIds: Set<string>;
   stageIds: Set<string>;
+  vipIds: Set<string>;
   floorCountByGuest: Map<string, number>;
   stageCountByGuest: Map<string, number>;
+  vipCountByGuest: Map<string, number>;
   hasStage: boolean;
+  hasVip: boolean;
 }
 
 export function buildGuestSeatIndex(
@@ -74,12 +85,17 @@ export function buildGuestSeatIndex(
 ): GuestSeatIndex {
   const floorIds = new Set<string>();
   const stageIds = new Set<string>();
+  const vipIds = new Set<string>();
   let hasStage = false;
+  let hasVip = false;
 
   for (const seat of seats) {
     if (seat.zone === 'stage') {
       stageIds.add(seat.id);
       hasStage = true;
+    } else if (seat.zone === 'vip') {
+      vipIds.add(seat.id);
+      hasVip = true;
     } else if (seat.zone === 'floor' || seat.zone === 'main') {
       floorIds.add(seat.id);
     }
@@ -87,6 +103,7 @@ export function buildGuestSeatIndex(
 
   const floorCountByGuest = new Map<string, number>();
   const stageCountByGuest = new Map<string, number>();
+  const vipCountByGuest = new Map<string, number>();
 
   for (const [seatId, assignment] of Object.entries(assignments)) {
     const guestId = assignment.guestId;
@@ -97,9 +114,12 @@ export function buildGuestSeatIndex(
     if (stageIds.has(seatId)) {
       stageCountByGuest.set(guestId, (stageCountByGuest.get(guestId) ?? 0) + 1);
     }
+    if (vipIds.has(seatId)) {
+      vipCountByGuest.set(guestId, (vipCountByGuest.get(guestId) ?? 0) + 1);
+    }
   }
 
-  return { floorIds, stageIds, floorCountByGuest, stageCountByGuest, hasStage };
+  return { floorIds, stageIds, vipIds, floorCountByGuest, stageCountByGuest, vipCountByGuest, hasStage, hasVip };
 }
 
 function floorCountFor(
@@ -110,6 +130,44 @@ function floorCountFor(
 ): number {
   if (index) return index.floorCountByGuest.get(guestId) ?? 0;
   return countGuestFloorSeats(guestId, assignments, seats);
+}
+
+function vipCountFor(
+  guestId: string,
+  index: GuestSeatIndex | null,
+  assignments: Record<string, SeatAssignment>,
+  seats: Seat[],
+): number {
+  if (index) return index.vipCountByGuest.get(guestId) ?? 0;
+  return countGuestVipSeats(guestId, assignments, seats);
+}
+
+export function countGuestVipSeats(
+  guestId: string,
+  assignments: Record<string, SeatAssignment>,
+  seats: Seat[],
+): number {
+  const vipIds = new Set(seats.filter((s) => s.zone === 'vip').map((s) => s.id));
+  return Object.entries(assignments).filter(
+    ([id, a]) => vipIds.has(id) && a.guestId === guestId,
+  ).length;
+}
+
+export function guestNeedsVipSeats(
+  ctx: SeatingContext,
+  guest: Guest,
+  index?: GuestSeatIndex | null,
+): boolean {
+  const p = participationFor(ctx, guest.id);
+  if (!p.vipEligible) return false;
+  const max = p.vipSeatCount ?? 1;
+  if (max <= 0) return false;
+  const seatIndex = index ?? buildGuestSeatIndex(ctx.assignments, ctx.seats);
+  return vipCountFor(guest.id, seatIndex, ctx.assignments, ctx.seats) < max;
+}
+
+export function guestIsVipEligible(ctx: SeatingContext, guestId: string): boolean {
+  return Boolean(participationFor(ctx, guestId).vipEligible);
 }
 
 function stageCountFor(
@@ -179,6 +237,9 @@ export function getUnassignedGuests(
   if (mode === 'stage') {
     return guests.filter((g) => guestNeedsStageSeats(ctx, g, seatIndex));
   }
+  if (mode === 'vip') {
+    return guests.filter((g) => guestNeedsVipSeats(ctx, g, seatIndex));
+  }
   return guests.filter((g) => guestNeedsFloorSeats(ctx, g, seatIndex));
 }
 
@@ -196,6 +257,12 @@ export function getAssignedGuests(
       return stageCountFor(g.id, seatIndex, ctx.assignments, ctx.seats) > 0;
     });
   }
+  if (mode === 'vip') {
+    return guests.filter((g) => {
+      if (!guestIsVipEligible(ctx, g.id)) return false;
+      return vipCountFor(g.id, seatIndex, ctx.assignments, ctx.seats) > 0;
+    });
+  }
   return guests.filter(
     (g) => floorCountFor(g.id, seatIndex, ctx.assignments, ctx.seats) > 0,
   );
@@ -210,8 +277,10 @@ export function getGuestQuotaStatus(
   const seatIndex = index ?? buildGuestSeatIndex(ctx.assignments, ctx.seats);
   const floorCount = floorCountFor(guest.id, seatIndex, ctx.assignments, ctx.seats);
   const stageCount = stageCountFor(guest.id, seatIndex, ctx.assignments, ctx.seats);
+  const vipCount = vipCountFor(guest.id, seatIndex, ctx.assignments, ctx.seats);
   const floorMax = Math.max(1, p.floorSeatCount);
   const stageMax = p.stageSeatCount ?? 1;
+  const vipMax = p.vipEligible ? (p.vipSeatCount ?? 1) : 0;
 
   return {
     floor: {
@@ -226,6 +295,12 @@ export function getGuestQuotaStatus(
       full: stageMax > 0 && stageCount >= stageMax,
       applicable: seatIndex.hasStage && stageMax > 0,
     },
+    vip: {
+      count: vipCount,
+      max: vipMax,
+      full: vipMax > 0 && vipCount >= vipMax,
+      applicable: seatIndex.hasVip && p.vipEligible && vipMax > 0,
+    },
   };
 }
 
@@ -238,6 +313,9 @@ export function getGuestQuotaTags(quota: GuestQuotaStatus, mode: SeatingMode): s
   }
   if (mode === 'stage' && quota.stage.applicable) {
     tags.push(`台上 ${quota.stage.count}/${quota.stage.max}`);
+  }
+  if (mode === 'vip' && quota.vip.applicable) {
+    tags.push(`VIP ${quota.vip.count}/${quota.vip.max}`);
   }
   return tags;
 }
@@ -258,6 +336,12 @@ export function formatGuestQuotaSummary(
     if (quota.stage.full) return `已排滿 ${count}/${max} 位`;
     return `已排 ${count}/${max} 位，尚餘 ${remaining} 位`;
   }
+  if (mode === 'vip' && quota.vip.applicable) {
+    const { count, max } = quota.vip;
+    const remaining = Math.max(0, max - count);
+    if (quota.vip.full) return `已排滿 ${count}/${max} 位`;
+    return `已排 ${count}/${max} 位，尚餘 ${remaining} 位`;
+  }
   return null;
 }
 
@@ -269,6 +353,7 @@ export function guestQuotaListItemClasses(
   const classes = [...extra];
   if (mode === 'audience' && quota.floor.full) classes.push('quota-full-floor');
   if (mode === 'stage' && quota.stage.full) classes.push('quota-full-stage');
+  if (mode === 'vip' && quota.vip.full) classes.push('quota-full-vip');
   return classes.filter(Boolean).join(' ');
 }
 
@@ -302,7 +387,15 @@ export function canAssignGuestToSeat(
     return count < max;
   }
 
-  return true;
+  if (seat.zone === 'vip') {
+    if (!p.vipEligible) return false;
+    const max = p.vipSeatCount ?? 1;
+    if (max <= 0) return false;
+    const count = countGuestVipSeats(guestId, ctx.assignments, ctx.seats);
+    return count < max;
+  }
+
+  return false;
 }
 
 export function canSwapSeats(ctx: SeatingContext, fromSeatId: string, toSeatId: string): boolean {
@@ -316,7 +409,9 @@ export function canSwapSeats(ctx: SeatingContext, fromSeatId: string, toSeatId: 
 
   const fromIsStage = fromSeat.zone === 'stage';
   const toIsStage = toSeat.zone === 'stage';
-  if (fromIsStage !== toIsStage) return false;
+  const fromIsVip = fromSeat.zone === 'vip';
+  const toIsVip = toSeat.zone === 'vip';
+  if (fromIsStage !== toIsStage || fromIsVip !== toIsVip) return false;
 
   return true;
 }
@@ -343,10 +438,13 @@ export function quotaDenyMessage(
   zone: QuotaZone,
   participation?: GuestParticipation,
 ): string {
-  const label = zone === 'floor' ? '台下' : '台上';
+  const label = zone === 'floor' ? '台下' : zone === 'stage' ? '台上' : 'VIP';
   const max =
     zone === 'floor'
       ? Math.max(1, participation?.floorSeatCount ?? 1)
-      : (participation?.stageSeatCount ?? 1);
-  return `${guest.name} ${label}佔位已排滿（${max} 個），無法再安排${label}座位`;
+      : zone === 'stage'
+        ? (participation?.stageSeatCount ?? 1)
+        : (participation?.vipSeatCount ?? 1);
+  const zoneLabel = zone === 'vip' ? 'VIP 休息室' : label;
+  return `${guest.name} ${zoneLabel}佔位已排滿（${max} 個），無法再安排${zone === 'vip' ? 'VIP' : label}座位`;
 }

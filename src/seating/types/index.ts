@@ -141,8 +141,51 @@ export interface GuestParticipation {
   guestId: string;
   audienceSeat: string | null;
   stageSeat: string | null;
+  vipSeat: string | null;
   floorSeatCount: number;
   stageSeatCount: number;
+  vipSeatCount: number;
+  vipEligible: boolean;
+}
+
+export type VipLoungeTableShape = 'coffee' | 'round';
+
+export interface VipLoungeSeatItem {
+  id: string;
+  kind: 'seat';
+  x: number;
+  y: number;
+  rotation?: number;
+  displayNumber?: number;
+}
+
+export interface VipLoungeTableItem {
+  id: string;
+  kind: 'table';
+  x: number;
+  y: number;
+  shape: VipLoungeTableShape;
+  width?: number;
+  height?: number;
+  label?: string;
+}
+
+/** 裝飾用椅子（不可排嘉賓） */
+export interface VipLoungeChairItem {
+  id: string;
+  kind: 'chair';
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+}
+
+export type VipLoungeItem = VipLoungeSeatItem | VipLoungeTableItem | VipLoungeChairItem;
+
+export interface VipLoungeConfig {
+  enabled: boolean;
+  items: VipLoungeItem[];
 }
 
 export interface SubEvent {
@@ -157,6 +200,7 @@ export interface SubEvent {
   assignments: Record<string, SeatAssignment>;
   showTooltip: boolean;
   customTableNumbers?: Record<string, string | number>;
+  vipLounge?: VipLoungeConfig;
   /** 手動勾選出席此子活動的嘉賓 ID */
   participantGuestIds: string[];
   participations: Record<string, GuestParticipation>;
@@ -166,13 +210,17 @@ export interface SubEvent {
 export interface Seat {
   id: string;
   label: string;
-  zone: 'main' | 'floor' | 'stage';
+  zone: 'main' | 'floor' | 'stage' | 'vip';
   row?: number;
   table?: number;
   side?: 0 | 1 | 2 | 3;
   index: number;
   displayNumber: number;
   customNumber?: string | number;
+  /** VIP 休息室自由定位 */
+  x?: number;
+  y?: number;
+  rotation?: number;
 }
 
 export interface SeatAssignment {
@@ -203,6 +251,7 @@ export interface SeatingPlan {
   participantGuestIds: string[];
   participations: Record<string, GuestParticipation>;
   step: EventStep;
+  vipLounge?: VipLoungeConfig;
   savedSnapshot?: string;
   createdAt: string;
   updatedAt: string;
@@ -213,8 +262,11 @@ export function defaultParticipation(guestId: string): GuestParticipation {
     guestId,
     audienceSeat: null,
     stageSeat: null,
+    vipSeat: null,
     floorSeatCount: 1,
     stageSeatCount: 1,
+    vipSeatCount: 1,
+    vipEligible: false,
   };
 }
 
@@ -283,8 +335,11 @@ export function normalizeParticipation(p: GuestParticipation): GuestParticipatio
     ...p,
     audienceSeat: p.audienceSeat ?? null,
     stageSeat: p.stageSeat ?? null,
+    vipSeat: p.vipSeat ?? null,
     floorSeatCount: Math.max(1, p.floorSeatCount ?? 1),
     stageSeatCount: p.stageSeatCount ?? 1,
+    vipSeatCount: Math.max(0, p.vipSeatCount ?? 1),
+    vipEligible: Boolean(p.vipEligible),
   };
 }
 

@@ -26,7 +26,7 @@ import {
 import type { SeatingMode } from '../../utils/guestSeats';
 import { useSeatingWorkspaceStore } from '../../store/seatingWorkspaceStore';
 
-export type SeatingToolbarMode = 'normal' | 'lock' | 'renumber' | 'aisle';
+export type SeatingToolbarMode = 'normal' | 'lock' | 'renumber' | 'aisle' | 'layout';
 
 interface SeatingChartProps {
   view: SeatingView;

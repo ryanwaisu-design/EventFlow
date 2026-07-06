@@ -7,8 +7,11 @@ export function defaultParticipation(guestId: string): GuestParticipation {
     guestId,
     audienceSeat: null,
     stageSeat: null,
+    vipSeat: null,
     floorSeatCount: 1,
     stageSeatCount: 1,
+    vipSeatCount: 1,
+    vipEligible: false,
   };
 }
 
@@ -24,20 +27,24 @@ export function syncParticipationSeatRefs(plan: SeatingPlan): SeatingPlan {
   for (const guestId of plan.participantGuestIds) {
     let audienceSeat: string | null = null;
     let stageSeat: string | null = null;
+    let vipSeat: string | null = null;
     for (const seat of plan.seats) {
       const assignment = plan.assignments[seat.id];
       if (assignment?.guestId !== guestId) continue;
       if (seat.zone === 'stage') stageSeat = seat.id;
+      else if (seat.zone === 'vip') vipSeat = seat.id;
       else if (!audienceSeat) audienceSeat = seat.id;
     }
     const prev = participations[guestId] ?? defaultParticipation(guestId);
-    participations[guestId] = { ...prev, audienceSeat, stageSeat };
+    participations[guestId] = { ...prev, audienceSeat, stageSeat, vipSeat };
   }
   return { ...plan, participations };
 }
 
 export function applyPlanVenueConfig(plan: SeatingPlan, venueConfig: VenueConfig): SeatingPlan {
-  const seats = generateSeats(venueConfig);
+  const vipSeats = plan.seats.filter((s) => s.zone === 'vip');
+  const generated = generateSeats(venueConfig);
+  const seats = [...generated, ...vipSeats];
   const assignments = mergeAssignments(seats, plan.assignments);
   const next = { ...plan, venueConfig, seats, assignments };
   return syncParticipationSeatRefs(next);
@@ -46,13 +53,16 @@ export function applyPlanVenueConfig(plan: SeatingPlan, venueConfig: VenueConfig
 export function regeneratePlanSeats(plan: SeatingPlan, force: boolean): SeatingPlan | null {
   const hasAssignments = Object.values(plan.assignments).some((a) => a.guestId);
   if (hasAssignments && !force) return null;
-  const seats = generateSeats(plan.venueConfig);
+  const vipSeats = plan.seats.filter((s) => s.zone === 'vip');
+  const generated = generateSeats(plan.venueConfig);
+  const seats = [...generated, ...vipSeats];
   const clearedParticipations: Record<string, GuestParticipation> = {};
   for (const guestId of plan.participantGuestIds) {
     clearedParticipations[guestId] = {
       ...(plan.participations[guestId] ?? defaultParticipation(guestId)),
       audienceSeat: null,
       stageSeat: null,
+      vipSeat: null,
     };
   }
   return {

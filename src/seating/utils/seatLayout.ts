@@ -462,6 +462,11 @@ export function buildVisualLayout(
       });
   }
 
+  const vipSeats = sortSeatsPhysical(view.seats.filter((s) => s.zone === 'vip'));
+  if (vipSeats.length > 0 && sub.vipLounge?.enabled) {
+    appendSeatBlock(result, '（VIP 休息室）', vipSeats, view, sub, anchorCol);
+  }
+
   normalizeLayoutColumns(result);
 
   // 長枱整排匯出：第一欄為統計數字，略窄

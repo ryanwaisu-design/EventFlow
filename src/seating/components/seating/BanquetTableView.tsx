@@ -18,7 +18,7 @@ interface BanquetSeatNodeProps {
   highlighted: boolean;
   variant: 'round' | 'long';
   tableNumber?: string | number;
-  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle';
+  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle' | 'layout';
   dragDisabled: boolean;
   dndEnabled?: boolean;
   onClick: () => void;
@@ -220,7 +220,7 @@ interface BanquetTableViewProps {
   guestQuotaByGuestId?: Map<string, string>;
   selectedSeatId: string | null;
   highlightGuestIds: string[];
-  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle';
+  toolbarMode: 'normal' | 'lock' | 'renumber' | 'aisle' | 'layout';
   dragDisabled: boolean;
   dndEnabled?: boolean;
   onSeatClick: (seatId: string) => void;
