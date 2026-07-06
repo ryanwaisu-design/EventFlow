@@ -257,10 +257,7 @@ export default function Guests() {
           <div className="grid sm:grid-cols-2 gap-4">
             <FormField label="姓名" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></FormField>
             <FormField label="類別" required><CategorySelect value={form.category} onChange={(v) => setForm({ ...form, category: v })} required /></FormField>
-            <FormField label="電郵"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FormField>
-            <FormField label="電話"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FormField>
           </div>
-          <FormField label="地址"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></FormField>
 
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
@@ -278,6 +275,12 @@ export default function Guests() {
               </div>
             ))}
           </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <FormField label="電郵"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FormField>
+            <FormField label="電話"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FormField>
+          </div>
+          <FormField label="地址"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></FormField>
 
           <div className="grid sm:grid-cols-3 gap-4">
             <FormField label="助理姓名"><Input value={form.assistantName} onChange={(e) => setForm({ ...form, assistantName: e.target.value })} /></FormField>
