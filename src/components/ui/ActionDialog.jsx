@@ -17,14 +17,22 @@ export default function ActionDialog({
   message,
   actions = [],
   closeOnBackdrop = false,
+  wide = false,
 }) {
   return (
     <Modal
       open={open}
       onClose={closeOnBackdrop ? onClose : () => {}}
       title={title}
+      wide={wide}
     >
-      <p className="text-secondary mb-6 whitespace-pre-line">{message}</p>
+      <div className="text-secondary mb-6">
+        {typeof message === 'string' ? (
+          <p className="whitespace-pre-line">{message}</p>
+        ) : (
+          message
+        )}
+      </div>
       <div className="flex flex-wrap gap-3 justify-end">
         {actions.map(({ label, onClick, variant = 'secondary' }) => (
           <button

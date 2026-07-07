@@ -4,6 +4,7 @@ import {
   ATTENDANCE_STATUS,
   EVENT_TYPES,
 } from '../data/constants';
+import { formatGuestCategoryLabel, getGuestCategoryLabel, parseImportedGuestCategory } from './guestCategories';
 import {
   getPrimaryAffiliation,
   escapeHTML,
@@ -12,13 +13,17 @@ import {
   formatDateTime,
 } from './helpers';
 
-function buildGuestRow(event, guest, att, categories) {
+function buildGuestRow(event, guest, att, categories, settings) {
   const aff = getPrimaryAffiliation(guest);
   const cats = categories || GUEST_CATEGORIES;
   return {
     活動名稱: event?.name || '',
     姓名: guest?.name || '',
-    類別: cats[guest?.category] || guest?.category || '',
+    類別: settings
+      ? formatGuestCategoryLabel(guest?.category, guest?.subcategory, settings)
+      : (cats[guest?.category] || guest?.category || ''),
+    主類別: getGuestCategoryLabel(guest?.category, settings || {}),
+    次類別: guest?.subcategory || '',
     所屬單位: aff.organization,
     職銜: aff.title,
     電郵: guest?.email || '',
@@ -51,28 +56,32 @@ function exportExcelRows(rows, filename) {
   );
 }
 
-export function buildAttendanceRows(event, guests, attendance, filterFn, categories) {
+export function buildAttendanceRows(event, guests, attendance, filterFn, categories, settings) {
   const guestMap = Object.fromEntries((guests || []).map((g) => [g.id, g]));
   return (attendance || [])
     .filter((a) => a.eventId === event?.id)
     .filter(filterFn || (() => true))
-    .map((a) => buildGuestRow(event, guestMap[a.guestId], a, categories));
+    .map((a) => buildGuestRow(event, guestMap[a.guestId], a, categories, settings));
 }
 
-export function exportAttendanceExcel(event, guests, attendance, filterFn, label, prefix, categories) {
-  const rows = buildAttendanceRows(event, guests, attendance, filterFn, categories);
+export function exportAttendanceExcel(event, guests, attendance, filterFn, label, prefix, categories, settings) {
+  const rows = buildAttendanceRows(event, guests, attendance, filterFn, categories, settings);
   if (!rows.length) throw new Error('沒有可匯出的資料');
   const filename = `${prefix}_${label}_${sanitizeFilename(event.name)}.xlsx`;
   exportExcelRows(rows, filename);
 }
 
-export function exportGuestDatabaseExcel(guests, prefix, categories) {
+export function exportGuestDatabaseExcel(guests, prefix, categories, settings) {
   const cats = categories || GUEST_CATEGORIES;
   const rows = (guests || []).map((g) => {
     const aff = getPrimaryAffiliation(g);
     return {
       姓名: g.name || '',
-      類別: cats[g.category] || g.category || '',
+      類別: settings
+        ? formatGuestCategoryLabel(g.category, g.subcategory, settings)
+        : (cats[g.category] || g.category || ''),
+      主類別: getGuestCategoryLabel(g.category, settings || {}),
+      次類別: g.subcategory || '',
       所屬單位: aff.organization,
       職銜: aff.title,
       電郵: g.email || '',
@@ -88,13 +97,14 @@ export function exportGuestDatabaseExcel(guests, prefix, categories) {
   exportExcelRows(rows, `${prefix}_嘉賓資料庫.xlsx`);
 }
 
-export function exportLabelMergeExcel(event, guests, attendance, prefix, categories) {
+export function exportLabelMergeExcel(event, guests, attendance, prefix, categories, settings) {
   const rows = buildAttendanceRows(
     event,
     guests,
     attendance,
     (a) => ['attending', 'checked_in'].includes(a.status),
     categories,
+    settings,
   ).map((r) => ({
     姓名: r.姓名,
     單位: r.所屬單位,
@@ -129,18 +139,18 @@ export function parseImportedGuestRow(row, generateId, nowISO, categories) {
   const name = row['姓名'] || row.name || row.Name || '';
   if (!name) return null;
 
-  const cats = categories || GUEST_CATEGORIES;
-  const categoryMap = Object.fromEntries(
-    Object.entries(cats).map(([k, v]) => [v, k])
+  const { category, subcategory } = parseImportedGuestCategory(
+    row['類別'] || row.category,
+    row['次類別'] || row['子類別'] || row.subcategory,
+    categories,
   );
-  const rawCategory = row['類別'] || row.category || 'other';
-  const category = categoryMap[rawCategory] || rawCategory || 'other';
 
   return {
     id: generateId(),
     name: String(name).trim(),
     photo: '',
     category,
+    subcategory,
     affiliations: [
       {
         organization: row['所屬單位'] || row.organization || '',

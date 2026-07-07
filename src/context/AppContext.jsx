@@ -1,7 +1,15 @@
 import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { loadAllData, saveAllData } from '../data/storage';
 import { generateId, nowISO } from '../utils/helpers';
-import { addCustomGuestCategory, getGuestCategories, removeCustomGuestCategory } from '../utils/guestCategories';
+import {
+  addCustomGuestCategory,
+  addGuestSubcategory as addGuestSubcategoryToSettings,
+  getGuestCategories,
+  getGuestSubcategories,
+  removeCustomGuestCategory,
+  removeGuestSubcategory,
+} from '../utils/guestCategories';
+import { planImportWithReplace } from '../utils/guestDuplicates';
 import { createEmptyPlan, normalizePlan, syncParticipantsFromAttendance, preparePlanForStorage } from '../seating/adapters/planAdapter';
 import { migratePlanToSubEvents } from '../seating/adapters/planSubEvent';
 import { writebackSeatingToAttendance } from '../seating/adapters/writebackAdapter';
@@ -76,6 +84,35 @@ export function AppProvider({ children }) {
     persist((prev) => ({ ...prev, guests: [...prev.guests, ...newGuests] }));
     showToast(`已匯入 ${newGuests.length} 位嘉賓`, 'success');
   }, [persist, showToast]);
+
+  const importGuestsReplacingDuplicates = useCallback((incomingGuests) => {
+    const { updates, toAdd } = planImportWithReplace(incomingGuests, data.guests);
+    persist((prev) => {
+      const patchById = new Map(updates.map((u) => [u.id, u.data]));
+      const guests = prev.guests.map((g) => {
+        const incoming = patchById.get(g.id);
+        if (!incoming) return g;
+        return {
+          ...g,
+          ...incoming,
+          id: g.id,
+          createdAt: g.createdAt,
+          updatedAt: nowISO(),
+        };
+      });
+      const added = toAdd.map((g) => ({
+        ...g,
+        id: generateId(),
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+      }));
+      return { ...prev, guests: [...guests, ...added] };
+    });
+    const parts = [];
+    if (updates.length) parts.push(`取代 ${updates.length} 位`);
+    if (toAdd.length) parts.push(`新增 ${toAdd.length} 位`);
+    showToast(parts.join('、') || '匯入完成', 'success');
+  }, [data.guests, persist, showToast]);
 
   const addEvent = useCallback((event) => {
     const newEvent = { ...event, id: generateId(), createdAt: nowISO(), updatedAt: nowISO() };
@@ -220,6 +257,36 @@ export function AppProvider({ children }) {
     showToast('已刪除自訂類別', 'success');
   }, [persist, showToast]);
 
+  const addGuestSubcategory = useCallback((parentCategory, label) => {
+    let resultLabel = null;
+    let isNew = false;
+    persist((prev) => {
+      const before = getGuestSubcategories(prev.settings, parentCategory);
+      const result = addGuestSubcategoryToSettings(prev.settings, parentCategory, label);
+      if (!result) return prev;
+      resultLabel = result.label;
+      const after = getGuestSubcategories(result.settings, parentCategory);
+      isNew = after.includes(result.label) && !before.includes(result.label);
+      if (result.settings !== prev.settings) {
+        return { ...prev, settings: result.settings };
+      }
+      return prev;
+    });
+    if (resultLabel && isNew) {
+      showToast(`已新增次類別「${resultLabel}」`, 'success');
+    }
+    return resultLabel;
+  }, [persist, showToast]);
+
+  const deleteGuestSubcategoryOption = useCallback((parentCategory, label) => {
+    persist((prev) => {
+      const result = removeGuestSubcategory(prev.settings, parentCategory, label);
+      if (result.error) return prev;
+      return { ...prev, settings: result.settings };
+    });
+    showToast('已刪除次類別', 'success');
+  }, [persist, showToast]);
+
   const guestCategories = useMemo(() => getGuestCategories(data.settings), [data.settings]);
 
   const restoreBackup = useCallback((backup) => {
@@ -283,12 +350,12 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       ...data, toasts, currentPage, sidebarOpen, selectedEventId,
       setSidebarOpen, setSelectedEventId, navigate, showToast, persist,
-      addGuest, updateGuest, deleteGuest, deleteGuests, importGuests,
+      addGuest, updateGuest, deleteGuest, deleteGuests, importGuests, importGuestsReplacingDuplicates,
       addEvent, updateEvent, deleteEvent, duplicateEvent,
       addGuestsToEvent, updateAttendance, bulkUpdateAttendance, removeFromEvent,
       bulkMarkInvited, bulkMarkAttending, bulkMarkDeclined, checkInGuest,
       updateSettings, restoreBackup, getGuestById, getEventById, getEventAttendance,
-      guestCategories, addGuestCategory, deleteGuestCategory,
+      guestCategories, addGuestCategory, deleteGuestCategory, addGuestSubcategory, deleteGuestSubcategoryOption,
       getSeatingPlan, ensureSeatingPlan, upsertSeatingPlan, syncSeatingParticipants, commitSeatingPlan,
     }}>
       {children}

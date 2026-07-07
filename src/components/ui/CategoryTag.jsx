@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext';
-import { getGuestCategoryLabel } from '../../utils/guestCategories';
+import { formatGuestCategoryLabel } from '../../utils/guestCategories';
 
 const CATEGORY_COLORS = {
   government: 'bg-info/20 text-info border-info/30',
@@ -14,9 +14,9 @@ const CATEGORY_COLORS = {
 
 const CUSTOM_COLOR = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
 
-export default function CategoryTag({ category, small }) {
+export default function CategoryTag({ category, subcategory, small }) {
   const { settings } = useApp();
-  const label = getGuestCategoryLabel(category, settings);
+  const label = formatGuestCategoryLabel(category, subcategory, settings);
   const isBuiltin = category && Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, category);
   const color = isBuiltin ? CATEGORY_COLORS[category] : CUSTOM_COLOR;
   return (

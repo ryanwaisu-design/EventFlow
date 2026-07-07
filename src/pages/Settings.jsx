@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { clearAllData, exportBackup, importBackup } from '../data/storage';
-import { GUEST_REGIONS } from '../data/constants';
-import { listCustomGuestCategories } from '../utils/guestCategories';
+import { GUEST_REGIONS, DEFAULT_GUEST_SUBCATEGORIES } from '../data/constants';
+import { getGuestSubcategories, listCustomGuestCategories } from '../utils/guestCategories';
 import { downloadText } from '../utils/helpers';
 import { getQuotaUsage, resetQuotaToday } from '../utils/searchQuota';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { FormField, Input, Select } from '../components/ui/FormFields';
 
 export default function Settings() {
-  const { settings, guests, events, attendance, seatingPlans, updateSettings, restoreBackup, showToast, deleteGuestCategory } = useApp();
+  const { settings, guests, events, attendance, seatingPlans, updateSettings, restoreBackup, showToast, deleteGuestCategory, deleteGuestSubcategoryOption, guestCategories } = useApp();
   const [form, setForm] = useState({ ...settings });
   const [confirmClear, setConfirmClear] = useState(false);
   const [quota, setQuota] = useState(getQuotaUsage());
@@ -133,6 +133,58 @@ export default function Settings() {
               })}
             </ul>
           )}
+        </div>
+
+        <div className="card p-6 mb-6">
+          <h2 className="section-title mb-2">嘉賓次類別（第二層）</h2>
+          <p className="text-sm text-muted mb-4">
+            次類別為選填，例如主類別「政府」下可選「行政會」。可在新增／編輯嘉賓時加入自訂次類別。
+          </p>
+          {Object.entries(guestCategories).map(([parentKey, parentLabel]) => {
+            const allLabels = getGuestSubcategories(form, parentKey);
+            if (!allLabels.length) return null;
+            const defaults = DEFAULT_GUEST_SUBCATEGORIES[parentKey] || [];
+            return (
+              <div key={parentKey} className="mb-4 last:mb-0">
+                <p className="text-sm font-medium text-primary mb-2">{parentLabel}</p>
+                <ul className="flex flex-wrap gap-2">
+                  {allLabels.map((label) => {
+                    const isBuiltin = defaults.includes(label);
+                    const inUse = guests.some((g) => g.category === parentKey && g.subcategory === label);
+                    return (
+                      <li
+                        key={label}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs text-secondary bg-bg"
+                      >
+                        <span>{label}</span>
+                        {isBuiltin && <span className="text-muted">內建</span>}
+                        {!isBuiltin && (
+                          <button
+                            type="button"
+                            className="text-danger hover:underline"
+                            onClick={() => {
+                              if (inUse) {
+                                showToast('仍有嘉賓使用此次類別，請先更改後再刪除', 'warning');
+                                return;
+                              }
+                              deleteGuestSubcategoryOption(parentKey, label);
+                              setForm((f) => {
+                                const map = { ...(f.guestCategorySubcategories || {}) };
+                                map[parentKey] = (map[parentKey] || []).filter((s) => s !== label);
+                                return { ...f, guestCategorySubcategories: map };
+                              });
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         <div className="card p-6 mb-6">

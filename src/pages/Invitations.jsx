@@ -247,7 +247,7 @@ export default function Invitations() {
                           <GuestAvatar guest={r.guest} size="sm" />
                           <div>
                             <p className="text-primary font-medium">{r.guest.name}</p>
-                            <CategoryTag category={r.guest.category} small />
+                            <CategoryTag category={r.guest.category} subcategory={r.guest.subcategory} small />
                           </div>
                         </div>
                       </td>

@@ -17,6 +17,18 @@ export const GUEST_CATEGORIES = {
   other: '其他',
 };
 
+/** 內建主類別的建議次類別（第二層，選填） */
+export const DEFAULT_GUEST_SUBCATEGORIES = {
+  government: ['行政會', '立法會', '司法機構', '公營機構'],
+  community: [],
+  public: [],
+  business: [],
+  media: [],
+  vip: [],
+  sponsor: [],
+  other: [],
+};
+
 export const EVENT_TYPES = {
   dinner: '晚宴',
   ceremony: '典禮',
@@ -94,4 +106,6 @@ export const DEFAULT_SETTINGS = {
   },
   /** 使用者自訂嘉賓類別 { key: 顯示名稱 } */
   customGuestCategories: {},
+  /** 各主類別下使用者新增的次類別 { [主類別key]: string[] } */
+  guestCategorySubcategories: {},
 };

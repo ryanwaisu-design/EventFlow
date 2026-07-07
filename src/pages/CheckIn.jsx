@@ -92,7 +92,7 @@ export default function CheckIn() {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <CategoryTag category={r.guest.category} small />
+                  <CategoryTag category={r.guest.category} subcategory={r.guest.subcategory} small />
                   {!isCheckedIn ? (
                     <button
                       onClick={() => checkInGuest(eventId, r.guestId)}

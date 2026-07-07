@@ -8,16 +8,20 @@ import EmptyState from '../components/ui/EmptyState';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ActionDialog from '../components/ui/ActionDialog';
+import DuplicateNameDialogContent from '../components/guests/DuplicateNameDialogContent';
 import PhotoPicker from '../components/guests/PhotoPicker';
-import { FormField, Input, Select, Textarea, CategorySelect, CategoryFilterSelect } from '../components/ui/FormFields';
+import { FormField, Input, Select, Textarea, GuestCategoryFields, CategoryFilterSelect } from '../components/ui/FormFields';
+import { getGuestSubcategories } from '../utils/guestCategories';
 import {
   findExistingDuplicateNames,
   analyzeImportDuplicateNames,
-  formatDuplicateNamesMessage,
+  buildDuplicateCompareForAdd,
+  buildDuplicateCompareForImport,
+  findExistingGuestsByName,
 } from '../utils/guestDuplicates';
 
 const emptyGuest = () => ({
-  name: '', photo: '', category: 'other',
+  name: '', photo: '', category: 'other', subcategory: '',
   photoSourceUrl: '', photoSourceName: '', photoSourceDate: '', photoRegion: '',
   affiliations: [{ organization: '', title: '', isPrimary: true }],
   email: '', phone: '', address: '',
@@ -26,7 +30,7 @@ const emptyGuest = () => ({
 });
 
 export default function Guests() {
-  const { guests, addGuest, updateGuest, deleteGuest, deleteGuests, importGuests, showToast, guestCategories, addGuestCategory } = useApp();
+  const { guests, addGuest, updateGuest, deleteGuest, deleteGuests, importGuests, importGuestsReplacingDuplicates, showToast, guestCategories, addGuestCategory, addGuestSubcategory, settings } = useApp();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [orgFilter, setOrgFilter] = useState('');
@@ -39,6 +43,11 @@ export default function Guests() {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState(null);
   const fileRef = useRef(null);
+
+  const formSubcategories = useMemo(
+    () => getGuestSubcategories(settings, form.category),
+    [settings, form.category],
+  );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -147,12 +156,17 @@ export default function Guests() {
     const data = {
       ...form,
       name: form.name.trim(),
+      subcategory: (form.subcategory || '').trim(),
       tags: typeof form.tags === 'string' ? form.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : form.tags,
     };
     if (!editing) {
       const dupes = findExistingDuplicateNames([data.name], guests);
       if (dupes.length) {
-        setDuplicateDialog({ kind: 'add', data, names: dupes });
+        setDuplicateDialog({
+          kind: 'add',
+          data,
+          compare: buildDuplicateCompareForAdd(data, guests, getPrimaryAffiliation),
+        });
         return;
       }
     }
@@ -168,7 +182,11 @@ export default function Guests() {
       if (!parsed.length) { showToast('未找到有效嘉賓資料', 'warning'); return; }
       const { all } = analyzeImportDuplicateNames(parsed, guests);
       if (all.length) {
-        setDuplicateDialog({ kind: 'import', guests: parsed, names: all });
+        setDuplicateDialog({
+          kind: 'import',
+          guests: parsed,
+          compare: buildDuplicateCompareForImport(parsed, guests, getPrimaryAffiliation),
+        });
         return;
       }
       importGuests(parsed);
@@ -180,6 +198,18 @@ export default function Guests() {
     if (!duplicateDialog) return;
     if (duplicateDialog.kind === 'add') saveGuest(duplicateDialog.data);
     else importGuests(duplicateDialog.guests);
+  };
+
+  const handleDuplicateReplace = () => {
+    if (!duplicateDialog) return;
+    if (duplicateDialog.kind === 'add') {
+      const existing = findExistingGuestsByName(duplicateDialog.data.name, guests);
+      if (!existing.length) return;
+      updateGuest(existing[0].id, duplicateDialog.data);
+      setModalOpen(false);
+      return;
+    }
+    importGuestsReplacingDuplicates(duplicateDialog.guests);
   };
 
   const handleDuplicateCancel = () => {
@@ -273,7 +303,7 @@ export default function Guests() {
                   <GuestAvatar guest={g} size="md" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-primary truncate group-hover:text-accent transition-colors">{g.name}</p>
-                    <div className="mt-1"><CategoryTag category={g.category} small /></div>
+                    <div className="mt-1"><CategoryTag category={g.category} subcategory={g.subcategory} small /></div>
                     <p className="text-sm text-secondary mt-2 truncate">{aff.organization}</p>
                     <p className="text-xs text-muted truncate">{aff.title}</p>
                   </div>
@@ -290,15 +320,17 @@ export default function Guests() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <FormField label="姓名" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></FormField>
-            <FormField label="類別" required>
-              <CategorySelect
-                value={form.category}
-                onChange={(v) => setForm({ ...form, category: v })}
-                categories={guestCategories}
-                onAddCategory={addGuestCategory}
-                required
-              />
-            </FormField>
+            <GuestCategoryFields
+              category={form.category}
+              subcategory={form.subcategory}
+              onCategoryChange={(v) => setForm({ ...form, category: v })}
+              onSubcategoryChange={(v) => setForm({ ...form, subcategory: v })}
+              categories={guestCategories}
+              subcategories={formSubcategories}
+              onAddCategory={addGuestCategory}
+              onAddSubcategory={addGuestSubcategory}
+              required
+            />
           </div>
 
           <div className="mb-4">
@@ -348,15 +380,18 @@ export default function Guests() {
         open={!!duplicateDialog}
         onClose={() => setDuplicateDialog(null)}
         title="發現重複姓名"
+        wide
         message={
-          duplicateDialog
-            ? formatDuplicateNamesMessage(duplicateDialog.names, {
-              action: duplicateDialog.kind === 'import' ? '匯入' : '新增',
-            })
-            : ''
+          duplicateDialog ? (
+            <DuplicateNameDialogContent
+              groups={duplicateDialog.compare}
+              action={duplicateDialog.kind === 'import' ? '匯入' : '新增'}
+            />
+          ) : null
         }
         actions={[
           { label: '兩者皆保留', variant: 'primary', onClick: handleDuplicateKeepBoth },
+          { label: '取代', variant: 'secondary', onClick: handleDuplicateReplace },
           { label: '取消', variant: 'secondary', onClick: handleDuplicateCancel },
           { label: '返回', variant: 'secondary', onClick: () => {} },
         ]}

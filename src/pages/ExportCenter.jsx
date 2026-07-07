@@ -50,7 +50,7 @@ export default function ExportCenter() {
     const cfg = EXPORT_FILTERS[key];
     if (!cfg) return;
     try {
-      exportAttendanceExcel(event, guests, attendance, cfg.filter, cfg.label, prefix, guestCategories);
+      exportAttendanceExcel(event, guests, attendance, cfg.filter, cfg.label, prefix, guestCategories, settings);
       showToast(`${cfg.label}已匯出`, 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
@@ -60,7 +60,7 @@ export default function ExportCenter() {
   const handleLabelExport = () => {
     if (!event) { showToast('請先選擇活動', 'warning'); return; }
     try {
-      exportLabelMergeExcel(event, guests, attendance, prefix, guestCategories);
+      exportLabelMergeExcel(event, guests, attendance, prefix, guestCategories, settings);
       showToast('標籤合併列印檔案已匯出', 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');
@@ -84,7 +84,7 @@ export default function ExportCenter() {
 
   const handleGuestExport = () => {
     try {
-      exportGuestDatabaseExcel(guests, prefix, guestCategories);
+      exportGuestDatabaseExcel(guests, prefix, guestCategories, settings);
       showToast('嘉賓資料庫已匯出', 'success');
     } catch (e) {
       showToast(e.message || '匯出失敗', 'error');

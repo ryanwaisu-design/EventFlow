@@ -204,7 +204,7 @@ export default function Recognition() {
                   <GuestAvatar guest={r.guest} size="xl" />
                 </div>
                 <h3 className="text-xl font-bold text-primary">{r.guest.name}</h3>
-                <div className="mt-2 flex justify-center"><CategoryTag category={r.guest.category} /></div>
+                <div className="mt-2 flex justify-center"><CategoryTag category={r.guest.category} subcategory={r.guest.subcategory} /></div>
                 <p className="text-sm text-secondary mt-3">{aff.organization}</p>
                 <p className="text-sm text-muted">{aff.title}</p>
                 {(r.tableNo || r.seatNo) && (
