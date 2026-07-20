@@ -102,6 +102,7 @@ function SeatCellCore({
         <div className="seat-tooltip">
           <span>{guest.organization || '—'}</span>
           <span>{guest.title || '—'}</span>
+          {guest.jobLevel ? <span>{guest.jobLevel}</span> : null}
           {quotaLabel && <span className="seat-tooltip-quota">{quotaLabel}</span>}
         </div>
       )}

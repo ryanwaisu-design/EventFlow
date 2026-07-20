@@ -8,6 +8,7 @@ export function toSeatingGuest(guest, rank = 0, attendance) {
     name: guest.name || '',
     organization: aff.organization || '',
     title: aff.title || '',
+    jobLevel: (guest.jobLevel || '').trim(),
     rank: rank || 1,
   };
 }

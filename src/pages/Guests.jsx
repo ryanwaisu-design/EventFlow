@@ -24,6 +24,7 @@ const emptyGuest = () => ({
   name: '', photo: '', category: 'other', subcategory: '',
   photoSourceUrl: '', photoSourceName: '', photoSourceDate: '', photoRegion: '',
   affiliations: [{ organization: '', title: '', isPrimary: true }],
+  jobLevel: '',
   email: '', phone: '', address: '',
   assistantName: '', assistantEmail: '', assistantPhone: '',
   notes: '', tags: [],
@@ -157,6 +158,7 @@ export default function Guests() {
       ...form,
       name: form.name.trim(),
       subcategory: (form.subcategory || '').trim(),
+      jobLevel: (form.jobLevel || '').trim(),
       affiliations: (form.affiliations || []).map((a) => ({
         id: a.id,
         organization: a.organization || '',
@@ -329,8 +331,8 @@ export default function Guests() {
             <GuestCategoryFields
               category={form.category}
               subcategory={form.subcategory}
-              onCategoryChange={(v) => setForm({ ...form, category: v })}
-              onSubcategoryChange={(v) => setForm({ ...form, subcategory: v })}
+              onCategoryChange={(v) => setForm((f) => ({ ...f, category: v }))}
+              onSubcategoryChange={(v) => setForm((f) => ({ ...f, subcategory: v }))}
               categories={guestCategories}
               subcategories={formSubcategories}
               onAddCategory={addGuestCategory}
@@ -355,6 +357,14 @@ export default function Guests() {
               </div>
             ))}
           </div>
+
+          <FormField label="職務層次">
+            <Input
+              value={form.jobLevel || ''}
+              onChange={(e) => setForm((f) => ({ ...f, jobLevel: e.target.value }))}
+              placeholder="選填，例如：副部級、司局級"
+            />
+          </FormField>
 
           <div className="grid sm:grid-cols-2 gap-4">
             <FormField label="電郵"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></FormField>

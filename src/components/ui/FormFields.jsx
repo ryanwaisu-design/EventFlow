@@ -100,6 +100,9 @@ export function CategorySelect({
         {Object.entries(categories).map(([k, v]) => (
           <option key={k} value={k}>{v}</option>
         ))}
+        {value && !categories[value] && !adding && (
+          <option value={value}>{value}</option>
+        )}
         {onAddCategory && <option value={ADD_CATEGORY_VALUE}>＋ 新增類別…</option>}
       </Select>
       {adding && (
@@ -226,17 +229,15 @@ export function GuestCategoryFields({
   onAddSubcategory,
   required,
 }) {
-  const handleCategoryChange = (next) => {
-    onCategoryChange(next);
-    onSubcategoryChange('');
-  };
-
   return (
     <div className="space-y-0">
       <FormField label="主類別" required={required}>
         <CategorySelect
           value={category}
-          onChange={handleCategoryChange}
+          onChange={(next) => {
+            onCategoryChange(next);
+            if (subcategory) onSubcategoryChange('');
+          }}
           categories={categories}
           onAddCategory={onAddCategory}
           required={required}

@@ -194,7 +194,8 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
       prev.every((g, i) =>
         g.id === seatingGuests[i]?.id
         && g.organization === seatingGuests[i]?.organization
-        && g.title === seatingGuests[i]?.title,
+        && g.title === seatingGuests[i]?.title
+        && (g.jobLevel || '') === (seatingGuests[i]?.jobLevel || ''),
       );
     if (!unchanged) {
       useSeatingWorkspaceStore.setState({ guests: seatingGuests });
@@ -497,7 +498,8 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
     return (
       g.name.toLowerCase().includes(sidebarSearch) ||
       g.organization.toLowerCase().includes(sidebarSearch) ||
-      g.title.toLowerCase().includes(sidebarSearch)
+      g.title.toLowerCase().includes(sidebarSearch) ||
+      (g.jobLevel || '').toLowerCase().includes(sidebarSearch)
     );
   };
 
@@ -507,7 +509,7 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
   const renderGuestQuotaMeta = (guest) => {
     const quota = getGuestQuotaStatus(seatingCtx, guest, seatIndex);
     const tags = getGuestQuotaTags(quota, seatingMode);
-    const meta = [guest.organization, guest.title].filter(Boolean).join(' · ') || '—';
+    const meta = [guest.organization, guest.title, guest.jobLevel].filter(Boolean).join(' · ') || '—';
     return tags.length > 0 ? `${meta} · ${tags.join(' · ')}` : meta;
   };
 

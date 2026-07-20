@@ -258,25 +258,18 @@ export function AppProvider({ children }) {
   }, [persist, showToast]);
 
   const addGuestCategory = useCallback((label) => {
-    let key = null;
-    let isNew = false;
-    persist((prev) => {
-      const before = prev.settings?.customGuestCategories || {};
-      const result = addCustomGuestCategory(prev.settings, label);
-      if (!result) return prev;
-      key = result.key;
-      const after = result.settings?.customGuestCategories || {};
-      isNew = Boolean(after[key] && !before[key]);
-      if (result.settings !== prev.settings) {
-        return { ...prev, settings: result.settings };
-      }
-      return prev;
-    });
-    if (key && isNew) {
+    const result = addCustomGuestCategory(data.settings, label);
+    if (!result) return null;
+    const before = data.settings?.customGuestCategories || {};
+    const isNew = Boolean(result.settings.customGuestCategories?.[result.key] && !before[result.key]);
+    if (result.settings !== data.settings) {
+      persist((prev) => ({ ...prev, settings: result.settings }));
+    }
+    if (isNew) {
       showToast(`已新增類別「${label.trim()}」`, 'success');
     }
-    return key;
-  }, [persist, showToast]);
+    return result.key;
+  }, [data.settings, persist, showToast]);
 
   const deleteGuestCategory = useCallback((key) => {
     persist((prev) => {
@@ -288,25 +281,18 @@ export function AppProvider({ children }) {
   }, [persist, showToast]);
 
   const addGuestSubcategory = useCallback((parentCategory, label) => {
-    let resultLabel = null;
-    let isNew = false;
-    persist((prev) => {
-      const before = getGuestSubcategories(prev.settings, parentCategory);
-      const result = addGuestSubcategoryToSettings(prev.settings, parentCategory, label);
-      if (!result) return prev;
-      resultLabel = result.label;
-      const after = getGuestSubcategories(result.settings, parentCategory);
-      isNew = after.includes(result.label) && !before.includes(result.label);
-      if (result.settings !== prev.settings) {
-        return { ...prev, settings: result.settings };
-      }
-      return prev;
-    });
-    if (resultLabel && isNew) {
-      showToast(`已新增次類別「${resultLabel}」`, 'success');
+    const result = addGuestSubcategoryToSettings(data.settings, parentCategory, label);
+    if (!result) return null;
+    const before = getGuestSubcategories(data.settings, parentCategory);
+    const isNew = !before.includes(result.label);
+    if (result.settings !== data.settings) {
+      persist((prev) => ({ ...prev, settings: result.settings }));
     }
-    return resultLabel;
-  }, [persist, showToast]);
+    if (isNew) {
+      showToast(`已新增次類別「${result.label}」`, 'success');
+    }
+    return result.label;
+  }, [data.settings, persist, showToast]);
 
   const deleteGuestSubcategoryOption = useCallback((parentCategory, label) => {
     persist((prev) => {

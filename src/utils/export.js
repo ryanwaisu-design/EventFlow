@@ -27,6 +27,7 @@ function buildGuestRow(event, guest, att, categories, settings) {
     次類別: guest?.subcategory || '',
     所屬單位: aff.organization,
     職銜: aff.title,
+    職務層次: guest?.jobLevel || '',
     電郵: guest?.email || '',
     電話: guest?.phone || '',
     地址: guest?.address || '',
@@ -85,6 +86,7 @@ export function exportGuestDatabaseExcel(guests, prefix, categories, settings) {
       次類別: g.subcategory || '',
       所屬單位: aff.organization,
       職銜: aff.title,
+      職務層次: g.jobLevel || '',
       電郵: g.email || '',
       電話: g.phone || '',
       地址: g.address || '',
@@ -152,6 +154,7 @@ export function parseImportedGuestRow(row, generateId, nowISO, categories) {
     photo: '',
     category,
     subcategory,
+    jobLevel: String(row['職務層次'] || row.jobLevel || '').trim(),
     affiliations: [
       {
         organization: row['所屬單位'] || row.organization || '',

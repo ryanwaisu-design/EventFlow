@@ -133,6 +133,8 @@ export interface Guest {
   name: string;
   organization: string;
   title: string;
+  /** 職務層次（選填） */
+  jobLevel?: string;
   rank: number;
 }
 
@@ -350,6 +352,7 @@ export function normalizeGuest(g: Guest & Partial<GuestParticipation>): Guest {
     name: g.name,
     organization: g.organization,
     title: g.title,
+    jobLevel: g.jobLevel || '',
     rank: g.rank,
   };
 }
