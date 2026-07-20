@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { getPrimaryAffiliation } from '../utils/helpers';
+import { getEventAffiliation } from '../utils/helpers';
 import { exportRecognitionWord } from '../utils/export';
 import {
   findGuestsWithStalePhotoSource,
   formatStalePhotoSourceMessage,
+  isPhotoSourceOlderThan,
 } from '../utils/photoSource';
 import GuestAvatar from '../components/ui/GuestAvatar';
 import CategoryTag from '../components/ui/CategoryTag';
@@ -42,7 +43,7 @@ export default function Recognition() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return records.filter((r) => {
-      const aff = getPrimaryAffiliation(r.guest);
+      const aff = getEventAffiliation(r.guest, r);
       const matchQ = !q || r.guest.name?.toLowerCase().includes(q) || aff.organization?.toLowerCase().includes(q);
       const matchC = !categoryFilter || r.guest.category === categoryFilter;
       return matchQ && matchC;
@@ -72,10 +73,20 @@ export default function Recognition() {
     }
   };
 
+  const staleInList = useMemo(
+    () => findGuestsWithStalePhotoSource(filtered.map((r) => r.guest)),
+    [filtered],
+  );
+
   const runRecognitionExport = async (guestIds) => {
     showToast('正在產生 Word 檔案…', 'info');
     await exportRecognitionWord(event, guests, attendance, { guestIds });
     showToast(`已匯出 ${guestIds.length} 位嘉賓的認人名單`, 'success');
+  };
+
+  const runPrint = () => {
+    setPrintMode(true);
+    setTimeout(() => { window.print(); setPrintMode(false); }, 100);
   };
 
   const handleExportWord = async () => {
@@ -87,7 +98,7 @@ export default function Recognition() {
     try {
       const stale = findGuestsWithStalePhotoSource(guests, { guestIds: selectedIds });
       if (stale.length) {
-        setStalePhotoDialog({ guestIds: selectedIds, stale });
+        setStalePhotoDialog({ mode: 'export', guestIds: selectedIds, stale });
         return;
       }
       await runRecognitionExport(selectedIds);
@@ -97,8 +108,15 @@ export default function Recognition() {
   };
 
   const handlePrint = () => {
-    setPrintMode(true);
-    setTimeout(() => { window.print(); setPrintMode(false); }, 100);
+    if (!filtered.length) {
+      showToast('目前沒有可列印的嘉賓', 'warning');
+      return;
+    }
+    if (staleInList.length) {
+      setStalePhotoDialog({ mode: 'print', stale: staleInList });
+      return;
+    }
+    runPrint();
   };
 
   if (!events.length) {
@@ -148,6 +166,14 @@ export default function Recognition() {
 
           <Input className="mb-4 no-print" placeholder="搜尋姓名或單位..." value={search} onChange={(e) => setSearch(e.target.value)} />
 
+          {staleInList.length > 0 && (
+            <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning no-print">
+              目前名單中有 {staleInList.length} 位嘉賓的相片來源日期已超過兩年
+              （{staleInList.slice(0, 3).map((g) => g.name).join('、')}
+              {staleInList.length > 3 ? ` 等` : ''}），建議更新相片後再列印或匯出。
+            </div>
+          )}
+
           {filtered.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 mb-4 no-print">
               <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
@@ -179,8 +205,9 @@ export default function Recognition() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((r) => {
-            const aff = getPrimaryAffiliation(r.guest);
+            const aff = getEventAffiliation(r.guest, r);
             const isSelected = selected.has(r.guestId);
+            const stalePhoto = Boolean(r.guest.photo && isPhotoSourceOlderThan(r.guest.photoSourceDate));
             return (
               <div
                 key={r.guestId}
@@ -200,6 +227,11 @@ export default function Recognition() {
                     onChange={() => toggleSelect(r.guestId)}
                   />
                 </label>
+                {stalePhoto && (
+                  <span className="absolute top-3 right-3 no-print text-[10px] px-1.5 py-0.5 rounded bg-warning/20 text-warning border border-warning/40">
+                    相片逾兩年
+                  </span>
+                )}
                 <div className="flex justify-center mb-3">
                   <GuestAvatar guest={r.guest} size="xl" />
                 </div>
@@ -221,13 +253,23 @@ export default function Recognition() {
         open={!!stalePhotoDialog}
         onClose={() => setStalePhotoDialog(null)}
         title="相片來源日期提醒"
-        message={stalePhotoDialog ? formatStalePhotoSourceMessage(stalePhotoDialog.stale) : ''}
+        message={
+          stalePhotoDialog
+            ? formatStalePhotoSourceMessage(stalePhotoDialog.stale, {
+              action: stalePhotoDialog.mode === 'print' ? '列印' : '匯出',
+            })
+            : ''
+        }
         actions={[
           {
-            label: '仍要匯出',
+            label: stalePhotoDialog?.mode === 'print' ? '仍要列印' : '仍要匯出',
             variant: 'primary',
             onClick: async () => {
               if (!stalePhotoDialog) return;
+              if (stalePhotoDialog.mode === 'print') {
+                runPrint();
+                return;
+              }
               try {
                 await runRecognitionExport(stalePhotoDialog.guestIds);
               } catch (e) {

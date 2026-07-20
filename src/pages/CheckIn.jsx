@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { getPrimaryAffiliation, formatDateTime } from '../utils/helpers';
+import { getEventAffiliation, formatDateTime } from '../utils/helpers';
 import GuestAvatar from '../components/ui/GuestAvatar';
 import CategoryTag from '../components/ui/CategoryTag';
 import EmptyState from '../components/ui/EmptyState';
@@ -24,7 +24,7 @@ export default function CheckIn() {
     const q = search.toLowerCase();
     return records.filter((r) => {
       if (!q) return true;
-      const aff = getPrimaryAffiliation(r.guest);
+      const aff = getEventAffiliation(r.guest, r);
       return (
         r.guest.name?.toLowerCase().includes(q) ||
         aff.organization?.toLowerCase().includes(q) ||
@@ -78,7 +78,7 @@ export default function CheckIn() {
       ) : (
         <div className="space-y-3">
           {filtered.map((r) => {
-            const aff = getPrimaryAffiliation(r.guest);
+            const aff = getEventAffiliation(r.guest, r);
             const isCheckedIn = r.status === 'checked_in';
             return (
               <div key={r.guestId} className={`card p-4 flex items-center gap-4 ${isCheckedIn ? 'border-success/30' : ''}`}>

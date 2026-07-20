@@ -1,5 +1,10 @@
 import { STORAGE_KEYS, DEFAULT_SETTINGS } from './constants';
 import { createSeedData } from './seedData';
+import {
+  ensureGuestsAffiliations,
+  getPrimaryAffiliation,
+  buildInviteAffiliationFields,
+} from '../utils/affiliations';
 
 function safeParse(json, fallback) {
   try {
@@ -47,10 +52,19 @@ export function loadAllData() {
     saveAllData({ guests, events, attendance, seatingPlans, settings });
   }
 
+  guests = ensureGuestsAffiliations(Array.isArray(guests) ? guests : []);
+  const guestMap = Object.fromEntries(guests.map((g) => [g.id, g]));
+  attendance = (Array.isArray(attendance) ? attendance : []).map((a) => {
+    if (a.inviteOrganization || a.inviteTitle || a.affiliationId) return a;
+    const guest = guestMap[a.guestId];
+    if (!guest) return a;
+    return { ...a, ...buildInviteAffiliationFields(getPrimaryAffiliation(guest)) };
+  });
+
   return {
-    guests: Array.isArray(guests) ? guests : [],
+    guests,
     events: Array.isArray(events) ? events : [],
-    attendance: Array.isArray(attendance) ? attendance : [],
+    attendance,
     seatingPlans: Array.isArray(seatingPlans) ? seatingPlans : [],
     settings,
   };

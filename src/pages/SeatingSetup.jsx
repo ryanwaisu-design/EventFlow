@@ -301,10 +301,14 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
     return ids.size;
   }, [attendance, event.id]);
 
-  const seatingGuests = useMemo(
-    () => toSeatingGuests(guests, plan.participantGuestIds),
-    [guests, plan.participantGuestIds],
-  );
+  const seatingGuests = useMemo(() => {
+    const attendanceByGuestId = Object.fromEntries(
+      (attendance || [])
+        .filter((a) => a.eventId === event.id)
+        .map((a) => [a.guestId, a]),
+    );
+    return toSeatingGuests(guests, plan.participantGuestIds, attendanceByGuestId);
+  }, [guests, plan.participantGuestIds, attendance, event.id]);
   const stats = useMemo(() => planStats(plan), [plan]);
 
   const handleSyncParticipants = () => {

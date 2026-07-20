@@ -7,6 +7,7 @@ import {
 import { formatGuestCategoryLabel, getGuestCategoryLabel, parseImportedGuestCategory } from './guestCategories';
 import {
   getPrimaryAffiliation,
+  getEventAffiliation,
   escapeHTML,
   downloadBlob,
   sanitizeFilename,
@@ -14,7 +15,7 @@ import {
 } from './helpers';
 
 function buildGuestRow(event, guest, att, categories, settings) {
-  const aff = getPrimaryAffiliation(guest);
+  const aff = getEventAffiliation(guest, att);
   const cats = categories || GUEST_CATEGORIES;
   return {
     活動名稱: event?.name || '',
@@ -223,7 +224,7 @@ function wordCellTd(inner) {
 
 function wordGuestCell(item, photoData) {
   if (!item) return wordCellTd('&nbsp;');
-  const aff = getPrimaryAffiliation(item.guest);
+  const aff = getEventAffiliation(item.guest, item.att);
   const name = escapeHTML(item.guest.name);
   const org = escapeHTML(aff.organization);
   const title = escapeHTML(aff.title);

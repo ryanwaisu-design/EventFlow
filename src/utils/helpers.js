@@ -53,16 +53,16 @@ export function nowISO() {
   return new Date().toISOString();
 }
 
-export function getPrimaryAffiliation(guest) {
-  if (!guest?.affiliations?.length) {
-    return { organization: '', title: '' };
-  }
-  const primary = guest.affiliations.find((a) => a.isPrimary) || guest.affiliations[0];
-  return {
-    organization: primary?.organization || '',
-    title: primary?.title || '',
-  };
-}
+export {
+  getPrimaryAffiliation,
+  getEventAffiliation,
+  formatAffiliationLabel,
+  ensureGuestAffiliations,
+  ensureGuestsAffiliations,
+  buildInviteAffiliationFields,
+  findMatchingAffiliation,
+  normalizeAffiliation,
+} from './affiliations';
 
 export function getInitials(name) {
   if (!name) return '?';

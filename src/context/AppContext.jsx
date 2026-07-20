@@ -10,6 +10,11 @@ import {
   removeGuestSubcategory,
 } from '../utils/guestCategories';
 import { planImportWithReplace } from '../utils/guestDuplicates';
+import {
+  ensureGuestAffiliations,
+  getPrimaryAffiliation,
+  buildInviteAffiliationFields,
+} from '../utils/affiliations';
 import { createEmptyPlan, normalizePlan, syncParticipantsFromAttendance, preparePlanForStorage } from '../seating/adapters/planAdapter';
 import { migratePlanToSubEvents } from '../seating/adapters/planSubEvent';
 import { writebackSeatingToAttendance } from '../seating/adapters/writebackAdapter';
@@ -46,18 +51,25 @@ export function AppProvider({ children }) {
   }, []);
 
   const addGuest = useCallback((guest) => {
-    const newGuest = { ...guest, id: generateId(), createdAt: nowISO(), updatedAt: nowISO() };
+    const newGuest = ensureGuestAffiliations({
+      ...guest,
+      id: generateId(),
+      createdAt: nowISO(),
+      updatedAt: nowISO(),
+    });
     persist((prev) => ({ ...prev, guests: [...prev.guests, newGuest] }));
     showToast('嘉賓已新增', 'success');
     return newGuest;
   }, [persist, showToast]);
 
-  const updateGuest = useCallback((id, updates) => {
+  const updateGuest = useCallback((id, updates, { silent = false } = {}) => {
     persist((prev) => ({
       ...prev,
-      guests: prev.guests.map((g) => (g.id === id ? { ...g, ...updates, updatedAt: nowISO() } : g)),
+      guests: prev.guests.map((g) =>
+        g.id === id ? ensureGuestAffiliations({ ...g, ...updates, updatedAt: nowISO() }) : g,
+      ),
     }));
-    showToast('嘉賓資料已更新', 'success');
+    if (!silent) showToast('嘉賓資料已更新', 'success');
   }, [persist, showToast]);
 
   const deleteGuest = useCallback((id) => {
@@ -81,8 +93,9 @@ export function AppProvider({ children }) {
   }, [persist, showToast]);
 
   const importGuests = useCallback((newGuests) => {
-    persist((prev) => ({ ...prev, guests: [...prev.guests, ...newGuests] }));
-    showToast(`已匯入 ${newGuests.length} 位嘉賓`, 'success');
+    const normalized = (newGuests || []).map((g) => ensureGuestAffiliations(g));
+    persist((prev) => ({ ...prev, guests: [...prev.guests, ...normalized] }));
+    showToast(`已匯入 ${normalized.length} 位嘉賓`, 'success');
   }, [persist, showToast]);
 
   const importGuestsReplacingDuplicates = useCallback((incomingGuests) => {
@@ -92,20 +105,22 @@ export function AppProvider({ children }) {
       const guests = prev.guests.map((g) => {
         const incoming = patchById.get(g.id);
         if (!incoming) return g;
-        return {
+        return ensureGuestAffiliations({
           ...g,
           ...incoming,
           id: g.id,
           createdAt: g.createdAt,
           updatedAt: nowISO(),
-        };
+        });
       });
-      const added = toAdd.map((g) => ({
-        ...g,
-        id: generateId(),
-        createdAt: nowISO(),
-        updatedAt: nowISO(),
-      }));
+      const added = toAdd.map((g) =>
+        ensureGuestAffiliations({
+          ...g,
+          id: generateId(),
+          createdAt: nowISO(),
+          updatedAt: nowISO(),
+        }),
+      );
       return { ...prev, guests: [...guests, ...added] };
     });
     const parts = [];
@@ -152,19 +167,34 @@ export function AppProvider({ children }) {
     return copy;
   }, [data.events, data.attendance, persist, showToast]);
 
-  const addGuestsToEvent = useCallback((eventId, guestIds, { silent = false } = {}) => {
+  const addGuestsToEvent = useCallback((eventId, guestIds, { silent = false, inviteByGuestId } = {}) => {
     const event = data.events.find((e) => e.id === eventId);
     if (!event) return 0;
     const existing = new Set(data.attendance.filter((a) => a.eventId === eventId).map((a) => a.guestId));
+    const guestMap = Object.fromEntries(data.guests.map((g) => [g.id, g]));
     const newRecords = guestIds
       .filter((gid) => !existing.has(gid))
-      .map((guestId) => ({
-        eventId, guestId,
-        status: event.isRsvpRequired ? 'pending_invite' : 'draft',
-        invitedDate: '', respondedDate: '', checkedInAt: '',
-        tableNo: '', seatNo: '', companionCount: 0,
-        dietaryNotes: '', vipNotes: '', internalNotes: '',
-      }));
+      .map((guestId) => {
+        const guest = guestMap[guestId];
+        const invite =
+          inviteByGuestId?.[guestId]
+          || buildInviteAffiliationFields(getPrimaryAffiliation(guest));
+        return {
+          eventId,
+          guestId,
+          status: event.isRsvpRequired ? 'pending_invite' : 'draft',
+          invitedDate: '',
+          respondedDate: '',
+          checkedInAt: '',
+          tableNo: '',
+          seatNo: '',
+          companionCount: 0,
+          dietaryNotes: '',
+          vipNotes: '',
+          internalNotes: '',
+          ...invite,
+        };
+      });
     if (!newRecords.length) {
       if (!silent) showToast('所選嘉賓已在活動中', 'warning');
       return 0;
@@ -172,7 +202,7 @@ export function AppProvider({ children }) {
     persist((prev) => ({ ...prev, attendance: [...prev.attendance, ...newRecords] }));
     if (!silent) showToast(`已添加 ${newRecords.length} 位嘉賓`, 'success');
     return newRecords.length;
-  }, [data.events, data.attendance, persist, showToast]);
+  }, [data.events, data.attendance, data.guests, persist, showToast]);
 
   const updateAttendance = useCallback((eventId, guestId, updates) => {
     persist((prev) => ({

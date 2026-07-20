@@ -12,6 +12,7 @@ export default function Seating() {
   const {
     events,
     guests,
+    attendance,
     selectedEventId,
     setSelectedEventId,
     getSeatingPlan,
@@ -41,7 +42,12 @@ export default function Seating() {
       const synced = syncSeatingParticipants(eventId);
       plan = normalizePlan(synced, event) || plan;
     }
-    const seatingGuests = toSeatingGuests(guests, plan.participantGuestIds);
+    const attendanceByGuestId = Object.fromEntries(
+      (attendance || [])
+        .filter((a) => a.eventId === eventId)
+        .map((a) => [a.guestId, a]),
+    );
+    const seatingGuests = toSeatingGuests(guests, plan.participantGuestIds, attendanceByGuestId);
     hydrate(plan, seatingGuests);
     setView(plan.step === 'dashboard' ? 'dashboard' : 'setup');
   }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps

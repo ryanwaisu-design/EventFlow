@@ -157,6 +157,12 @@ export default function Guests() {
       ...form,
       name: form.name.trim(),
       subcategory: (form.subcategory || '').trim(),
+      affiliations: (form.affiliations || []).map((a) => ({
+        id: a.id,
+        organization: a.organization || '',
+        title: a.title || '',
+        isPrimary: Boolean(a.isPrimary),
+      })),
       tags: typeof form.tags === 'string' ? form.tags.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : form.tags,
     };
     if (!editing) {

@@ -25,8 +25,8 @@ export function findGuestsWithStalePhotoSource(guestList, { guestIds, years = PH
   });
 }
 
-export function formatStalePhotoSourceMessage(guests) {
+export function formatStalePhotoSourceMessage(guests, { action = '使用' } = {}) {
   if (!guests.length) return '';
   const lines = guests.map((g) => `· ${g.name}（來源日期：${g.photoSourceDate}）`);
-  return `以下 ${guests.length} 位嘉賓的相片來源日期已超過 ${PHOTO_SOURCE_MAX_AGE_YEARS} 年，建議更新後再匯出：\n\n${lines.join('\n')}`;
+  return `以下 ${guests.length} 位嘉賓的相片來源日期已超過 ${PHOTO_SOURCE_MAX_AGE_YEARS} 年，建議更新後再${action}：\n\n${lines.join('\n')}`;
 }

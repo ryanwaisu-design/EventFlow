@@ -65,7 +65,7 @@ import {
 } from '../seating/utils/tableNumber';
 
 export default function SeatingDashboard({ event, onBackToSetup }) {
-  const { commitSeatingPlan, showToast, guests: appGuests } = useApp();
+  const { commitSeatingPlan, showToast, guests: appGuests, attendance } = useApp();
   const { confirmLeave } = useUnsavedGuard(true);
 
   const plan = useSeatingWorkspaceStore((s) => s.plan);
@@ -182,18 +182,27 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
 
   useEffect(() => {
     if (!plan) return;
-    const seatingGuests = toSeatingGuests(appGuests, plan.participantGuestIds);
+    const attendanceByGuestId = Object.fromEntries(
+      (attendance || [])
+        .filter((a) => a.eventId === plan.eventId)
+        .map((a) => [a.guestId, a]),
+    );
+    const seatingGuests = toSeatingGuests(appGuests, plan.participantGuestIds, attendanceByGuestId);
     const prev = useSeatingWorkspaceStore.getState().guests;
     const unchanged =
       prev.length === seatingGuests.length &&
-      prev.every((g, i) => g.id === seatingGuests[i]?.id);
+      prev.every((g, i) =>
+        g.id === seatingGuests[i]?.id
+        && g.organization === seatingGuests[i]?.organization
+        && g.title === seatingGuests[i]?.title,
+      );
     if (!unchanged) {
       useSeatingWorkspaceStore.setState({ guests: seatingGuests });
     }
     setSelectedGuestId(null);
     setSelectedSeatId(null);
     setHighlightGuestIds([]);
-  }, [plan?.currentSubEventId, participantGuestKey, appGuests]);
+  }, [plan?.currentSubEventId, participantGuestKey, appGuests, attendance, plan?.eventId]);
 
   const makeSnapshot = useCallback(() => {
     if (!plan) return null;
