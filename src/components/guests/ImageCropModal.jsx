@@ -271,24 +271,25 @@ export default function ImageCropModal({
   return (
     <Modal open={open} onClose={onClose} title="裁切與修圖" wide>
       <p className="text-sm text-secondary mb-1">
-        調整位置、縮放與基本修圖，確認 {CROP_RATIO_LABEL} 預覽後儲存。
+        左側即時預覽；右側調整位置、縮放與修圖，確認 {CROP_RATIO_LABEL} 後儲存。
       </p>
       {imgMeta && (
-        <p className="text-xs text-muted mb-4">
+        <p className="text-xs text-muted mb-3">
           {aspectLabel}
           {!canPan && scale <= 1 && ' · 預設完整顯示原圖，放大後可拖曳或平移'}
         </p>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-6 mb-4">
-        <div>
+      <div className="grid sm:grid-cols-[minmax(180px,220px)_minmax(0,1fr)] gap-4 sm:gap-6 mb-4 items-start">
+        {/* 預覽固定在可視區，調修圖時不必捲走相片 */}
+        <div className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm pb-2 sm:pb-0 -mx-1 px-1">
           <p className="text-xs text-muted mb-2">
-            編輯區（所見即所得）
-            {canPan && <span className="text-accent ml-1">· 可拖曳移動</span>}
+            即時預覽（{CROP_RATIO_LABEL}）
+            {canPan && <span className="text-accent ml-1">· 可拖曳</span>}
           </p>
           <div
             ref={editorWrapRef}
-            className={`relative mx-auto max-w-xs aspect-[3/4] bg-bg rounded-xl overflow-hidden border-2 border-accent select-none touch-none ${
+            className={`relative mx-auto w-full max-w-[220px] aspect-[3/4] bg-bg rounded-xl overflow-hidden border-2 border-accent select-none touch-none ${
               canPan ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
             }`}
             onPointerDown={handlePointerDown}
@@ -309,120 +310,108 @@ export default function ImageCropModal({
             )}
             {canPan && imageReady && (
               <div className="absolute bottom-2 left-0 right-0 text-center pointer-events-none">
-                <span className="text-xs px-2 py-1 rounded-full bg-bg/80 text-muted">拖曳以調整位置</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-bg/80 text-muted">拖曳調整位置</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col items-center">
-          <p className="text-xs text-muted mb-2">相片預覽（{CROP_RATIO_LABEL}）</p>
-          {framePreview ? (
-            <img
-              src={framePreview}
-              alt="裁切預覽"
-              className="w-36 aspect-[3/4] object-cover rounded-xl border-2 border-accent"
-            />
-          ) : (
-            <div className="w-36 aspect-[3/4] rounded-xl bg-card border border-border flex items-center justify-center text-muted text-sm">
-              載入中…
+        <div className="space-y-3 min-w-0">
+          <div className="space-y-3 p-3 sm:p-4 bg-card rounded-xl border border-border">
+            <p className="text-sm font-medium text-primary">裁切位置</p>
+            <label className="block">
+              <span className="text-sm text-secondary">縮放（1 = 完整顯示）</span>
+              <input type="range" min="1" max="3" step="0.05" value={scale} onChange={(e) => setScale(parseFloat(e.target.value))} className="w-full accent-accent mt-1" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-secondary">
+                水平位移
+                {panLimits.maxPanX === 0 && <span className="text-muted ml-1">（請先放大）</span>}
+              </span>
+              <input type="range" min={-panLimits.maxPanX} max={panLimits.maxPanX} step="1" value={offsetX} disabled={panLimits.maxPanX === 0} onChange={(e) => setOffsetX(parseInt(e.target.value, 10))} className="w-full accent-accent mt-1 disabled:opacity-40" />
+            </label>
+            <label className="block">
+              <span className="text-sm text-secondary">
+                垂直位移（向右 = 向上）
+                {panLimits.maxPanY === 0 && <span className="text-muted ml-1">（請先放大）</span>}
+              </span>
+              <input type="range" min={-panLimits.maxPanY} max={panLimits.maxPanY} step="1" value={offsetY} disabled={panLimits.maxPanY === 0} onChange={(e) => setOffsetY(parseInt(e.target.value, 10))} className="w-full accent-accent mt-1 disabled:opacity-40" />
+            </label>
+          </div>
+
+          <div className="space-y-3 p-3 sm:p-4 bg-card rounded-xl border border-border">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-primary">基本修圖</p>
+              <button
+                type="button"
+                className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
+                disabled={!hasAdjustments}
+                onClick={resetAdjustments}
+              >
+                重設修圖
+              </button>
             </div>
-          )}
+            <label className="block">
+              <span className="text-sm text-secondary flex justify-between">
+                <span>亮度</span>
+                <span className="text-muted tabular-nums">{formatAdjustLabel(brightness)}</span>
+              </span>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={brightness}
+                onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
+                className="w-full accent-accent mt-1"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm text-secondary flex justify-between">
+                <span>對比</span>
+                <span className="text-muted tabular-nums">{formatAdjustLabel(contrast)}</span>
+              </span>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={contrast}
+                onChange={(e) => setContrast(parseInt(e.target.value, 10))}
+                className="w-full accent-accent mt-1"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm text-secondary flex justify-between">
+                <span>飽和度</span>
+                <span className="text-muted tabular-nums">{formatAdjustLabel(saturate)}</span>
+              </span>
+              <input
+                type="range"
+                min="-50"
+                max="50"
+                step="1"
+                value={saturate}
+                onChange={(e) => setSaturate(parseInt(e.target.value, 10))}
+                className="w-full accent-accent mt-1"
+              />
+            </label>
+          </div>
+
+          <div className="grid sm:grid-cols-1 gap-3 p-3 sm:p-4 bg-card rounded-xl border border-border">
+            <FormField label="來源連結">
+              <Input type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." />
+            </FormField>
+            <FormField label="來源日期" required>
+              <Input type="date" value={sourceDate} onChange={(e) => setSourceDate(e.target.value)} required />
+            </FormField>
+          </div>
         </div>
-      </div>
-
-      <div className="space-y-4 mb-4 p-4 bg-card rounded-xl border border-border">
-        <label className="block">
-          <span className="text-sm text-secondary">縮放（1 = 完整顯示原圖）</span>
-          <input type="range" min="1" max="3" step="0.05" value={scale} onChange={(e) => setScale(parseFloat(e.target.value))} className="w-full accent-accent mt-1" />
-        </label>
-        <label className="block">
-          <span className="text-sm text-secondary">
-            水平位移
-            {panLimits.maxPanX === 0 && <span className="text-muted ml-1">（請先放大）</span>}
-          </span>
-          <input type="range" min={-panLimits.maxPanX} max={panLimits.maxPanX} step="1" value={offsetX} disabled={panLimits.maxPanX === 0} onChange={(e) => setOffsetX(parseInt(e.target.value, 10))} className="w-full accent-accent mt-1 disabled:opacity-40" />
-        </label>
-        <label className="block">
-          <span className="text-sm text-secondary">
-            垂直位移（向右 = 向上顯示，可露出頭髮）
-            {panLimits.maxPanY === 0 && <span className="text-muted ml-1">（請先放大）</span>}
-          </span>
-          <input type="range" min={-panLimits.maxPanY} max={panLimits.maxPanY} step="1" value={offsetY} disabled={panLimits.maxPanY === 0} onChange={(e) => setOffsetY(parseInt(e.target.value, 10))} className="w-full accent-accent mt-1 disabled:opacity-40" />
-        </label>
-      </div>
-
-      <div className="space-y-4 mb-6 p-4 bg-card rounded-xl border border-border">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-primary">基本修圖</p>
-          <button
-            type="button"
-            className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
-            disabled={!hasAdjustments}
-            onClick={resetAdjustments}
-          >
-            重設修圖
-          </button>
-        </div>
-        <label className="block">
-          <span className="text-sm text-secondary flex justify-between">
-            <span>亮度</span>
-            <span className="text-muted tabular-nums">{formatAdjustLabel(brightness)}</span>
-          </span>
-          <input
-            type="range"
-            min="-50"
-            max="50"
-            step="1"
-            value={brightness}
-            onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
-            className="w-full accent-accent mt-1"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-secondary flex justify-between">
-            <span>對比</span>
-            <span className="text-muted tabular-nums">{formatAdjustLabel(contrast)}</span>
-          </span>
-          <input
-            type="range"
-            min="-50"
-            max="50"
-            step="1"
-            value={contrast}
-            onChange={(e) => setContrast(parseInt(e.target.value, 10))}
-            className="w-full accent-accent mt-1"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-secondary flex justify-between">
-            <span>飽和度</span>
-            <span className="text-muted tabular-nums">{formatAdjustLabel(saturate)}</span>
-          </span>
-          <input
-            type="range"
-            min="-50"
-            max="50"
-            step="1"
-            value={saturate}
-            onChange={(e) => setSaturate(parseInt(e.target.value, 10))}
-            className="w-full accent-accent mt-1"
-          />
-        </label>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-4 mb-6 p-4 bg-card rounded-xl border border-border">
-        <FormField label="來源連結">
-          <Input type="url" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://..." />
-        </FormField>
-        <FormField label="來源日期" required>
-          <Input type="date" value={sourceDate} onChange={(e) => setSourceDate(e.target.value)} required />
-        </FormField>
       </div>
 
       {error && <p className="text-danger text-sm mb-4">{error}</p>}
 
-      <div className="flex justify-end gap-3">
+      <div className="flex justify-end gap-3 sticky bottom-0 bg-card pt-2 pb-1 border-t border-border/60 -mb-1">
         <button type="button" onClick={onClose} className="btn-secondary">取消</button>
         <button type="button" onClick={handleConfirm} disabled={loading || !imageReady} className="btn-primary disabled:opacity-50">
           {loading ? '處理中…' : '確認使用'}
