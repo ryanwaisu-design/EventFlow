@@ -8,8 +8,20 @@ import {
   CROP_WIDTH,
   CROP_HEIGHT,
   CROP_RATIO_LABEL,
+  DEFAULT_PHOTO_ADJUST,
 } from '../../utils/imageUtils';
 import { todayISO } from '../../utils/helpers';
+
+/** UI 滑桿：-50～+50 → canvas 倍率 0.5～1.5（0 = 不變） */
+function sliderToFactor(value) {
+  return 1 + (Number(value) || 0) / 100;
+}
+
+function formatAdjustLabel(value) {
+  const n = Number(value) || 0;
+  if (n === 0) return '標準';
+  return n > 0 ? `+${n}` : `${n}`;
+}
 
 export default function ImageCropModal({
   open,
@@ -21,6 +33,9 @@ export default function ImageCropModal({
   const [scale, setScale] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
+  const [saturate, setSaturate] = useState(0);
   const [framePreview, setFramePreview] = useState('');
   const [imgMeta, setImgMeta] = useState(null);
   const [panLimits, setPanLimits] = useState({ maxPanX: 0, maxPanY: 0 });
@@ -37,12 +52,22 @@ export default function ImageCropModal({
   const dragRef = useRef(null);
   const rafRef = useRef(null);
   const previewTimerRef = useRef(null);
-  const cropParamsRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
+  const cropParamsRef = useRef({
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    brightness: DEFAULT_PHOTO_ADJUST.brightness,
+    contrast: DEFAULT_PHOTO_ADJUST.contrast,
+    saturate: DEFAULT_PHOTO_ADJUST.saturate,
+  });
 
   const cropOptions = useCallback(() => ({
     scale: cropParamsRef.current.scale,
     offsetX: cropParamsRef.current.offsetX,
     offsetY: cropParamsRef.current.offsetY,
+    brightness: cropParamsRef.current.brightness,
+    contrast: cropParamsRef.current.contrast,
+    saturate: cropParamsRef.current.saturate,
     fit: 'contain',
     outputWidth: CROP_WIDTH,
     outputHeight: CROP_HEIGHT,
@@ -75,17 +100,31 @@ export default function ImageCropModal({
     else previewTimerRef.current = setTimeout(run, dragging ? 200 : 60);
   }, [dragging]);
 
+  const resetAdjustments = () => {
+    setBrightness(0);
+    setContrast(0);
+    setSaturate(0);
+  };
+
   useEffect(() => {
     if (!open || !imageSrc) return;
     setScale(1);
     setOffsetX(0);
     setOffsetY(0);
+    setBrightness(0);
+    setContrast(0);
+    setSaturate(0);
     setError('');
     setFramePreview('');
     setImgMeta(null);
     setImageReady(false);
     imgRef.current = null;
-    cropParamsRef.current = { scale: 1, offsetX: 0, offsetY: 0 };
+    cropParamsRef.current = {
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      ...DEFAULT_PHOTO_ADJUST,
+    };
     setSourceDate(sourceMeta.photoSourceDate || todayISO());
     setSourceUrl(sourceMeta.photoSourceUrl || '');
 
@@ -117,10 +156,27 @@ export default function ImageCropModal({
 
   useEffect(() => {
     if (!imageReady) return;
-    cropParamsRef.current = { scale, offsetX, offsetY };
+    cropParamsRef.current = {
+      scale,
+      offsetX,
+      offsetY,
+      brightness: sliderToFactor(brightness),
+      contrast: sliderToFactor(contrast),
+      saturate: sliderToFactor(saturate),
+    };
     paintEditor();
     scheduleFramePreview();
-  }, [imageReady, scale, offsetX, offsetY, paintEditor, scheduleFramePreview]);
+  }, [
+    imageReady,
+    scale,
+    offsetX,
+    offsetY,
+    brightness,
+    contrast,
+    saturate,
+    paintEditor,
+    scheduleFramePreview,
+  ]);
 
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -128,6 +184,7 @@ export default function ImageCropModal({
   }, []);
 
   const canPan = panLimits.maxPanX > 0 || panLimits.maxPanY > 0;
+  const hasAdjustments = brightness !== 0 || contrast !== 0 || saturate !== 0;
 
   const getDragFactors = () => {
     const w = editorWrapRef.current?.clientWidth || CROP_WIDTH;
@@ -212,9 +269,9 @@ export default function ImageCropModal({
   if (!open) return null;
 
   return (
-    <Modal open={open} onClose={onClose} title="裁切相片" wide>
+    <Modal open={open} onClose={onClose} title="裁切與修圖" wide>
       <p className="text-sm text-secondary mb-1">
-        調整縮放與位置，確認 {CROP_RATIO_LABEL} 預覽後儲存。
+        調整位置、縮放與基本修圖，確認 {CROP_RATIO_LABEL} 預覽後儲存。
       </p>
       {imgMeta && (
         <p className="text-xs text-muted mb-4">
@@ -274,7 +331,7 @@ export default function ImageCropModal({
         </div>
       </div>
 
-      <div className="space-y-4 mb-6 p-4 bg-card rounded-xl border border-border">
+      <div className="space-y-4 mb-4 p-4 bg-card rounded-xl border border-border">
         <label className="block">
           <span className="text-sm text-secondary">縮放（1 = 完整顯示原圖）</span>
           <input type="range" min="1" max="3" step="0.05" value={scale} onChange={(e) => setScale(parseFloat(e.target.value))} className="w-full accent-accent mt-1" />
@@ -292,6 +349,65 @@ export default function ImageCropModal({
             {panLimits.maxPanY === 0 && <span className="text-muted ml-1">（請先放大）</span>}
           </span>
           <input type="range" min={-panLimits.maxPanY} max={panLimits.maxPanY} step="1" value={offsetY} disabled={panLimits.maxPanY === 0} onChange={(e) => setOffsetY(parseInt(e.target.value, 10))} className="w-full accent-accent mt-1 disabled:opacity-40" />
+        </label>
+      </div>
+
+      <div className="space-y-4 mb-6 p-4 bg-card rounded-xl border border-border">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-primary">基本修圖</p>
+          <button
+            type="button"
+            className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
+            disabled={!hasAdjustments}
+            onClick={resetAdjustments}
+          >
+            重設修圖
+          </button>
+        </div>
+        <label className="block">
+          <span className="text-sm text-secondary flex justify-between">
+            <span>亮度</span>
+            <span className="text-muted tabular-nums">{formatAdjustLabel(brightness)}</span>
+          </span>
+          <input
+            type="range"
+            min="-50"
+            max="50"
+            step="1"
+            value={brightness}
+            onChange={(e) => setBrightness(parseInt(e.target.value, 10))}
+            className="w-full accent-accent mt-1"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm text-secondary flex justify-between">
+            <span>對比</span>
+            <span className="text-muted tabular-nums">{formatAdjustLabel(contrast)}</span>
+          </span>
+          <input
+            type="range"
+            min="-50"
+            max="50"
+            step="1"
+            value={contrast}
+            onChange={(e) => setContrast(parseInt(e.target.value, 10))}
+            className="w-full accent-accent mt-1"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm text-secondary flex justify-between">
+            <span>飽和度</span>
+            <span className="text-muted tabular-nums">{formatAdjustLabel(saturate)}</span>
+          </span>
+          <input
+            type="range"
+            min="-50"
+            max="50"
+            step="1"
+            value={saturate}
+            onChange={(e) => setSaturate(parseInt(e.target.value, 10))}
+            className="w-full accent-accent mt-1"
+          />
         </label>
       </div>
 

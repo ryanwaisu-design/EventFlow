@@ -3,6 +3,13 @@ export const CROP_WIDTH = 300;
 export const CROP_HEIGHT = 400;
 export const CROP_RATIO_LABEL = '4:3（高:闊）';
 
+/** 修圖預設值（1 = 不變） */
+export const DEFAULT_PHOTO_ADJUST = {
+  brightness: 1,
+  contrast: 1,
+  saturate: 1,
+};
+
 export function isImageUrl(str) {
   if (!str) return false;
   return /\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(str) || str.startsWith('data:image/');
@@ -23,6 +30,21 @@ function getOutputSize(options) {
     outW: options.outputWidth ?? options.size ?? CROP_WIDTH,
     outH: options.outputHeight ?? Math.round((options.outputWidth ?? options.size ?? CROP_WIDTH) * (4 / 3)),
   };
+}
+
+/**
+ * 將亮度／對比／飽和度數值轉為 canvas filter 字串
+ * @param {{ brightness?: number, contrast?: number, saturate?: number }} adjust
+ */
+export function buildPhotoFilter({
+  brightness = 1,
+  contrast = 1,
+  saturate = 1,
+} = {}) {
+  const b = Math.max(0.2, Math.min(2, Number(brightness) || 1));
+  const c = Math.max(0.2, Math.min(2, Number(contrast) || 1));
+  const s = Math.max(0, Math.min(2, Number(saturate) || 1));
+  return `brightness(${b}) contrast(${c}) saturate(${s})`;
 }
 
 /**
@@ -76,10 +98,13 @@ export function drawCropToCanvas(canvas, img, options = {}) {
     canvas.height = outH;
   }
   const ctx = canvas.getContext('2d');
+  ctx.filter = 'none';
   ctx.fillStyle = '#1a2235';
   ctx.fillRect(0, 0, outW, outH);
   const { x, y, drawW, drawH } = computeCropDraw(img, { ...options, outputWidth: outW, outputHeight: outH });
+  ctx.filter = buildPhotoFilter(options);
   ctx.drawImage(img, x, y, drawW, drawH);
+  ctx.filter = 'none';
   return canvas;
 }
 
