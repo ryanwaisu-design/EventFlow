@@ -1,6 +1,6 @@
 import type { Guest, Seat, SeatingPlan } from '../types';
 import { longTableSeatLabel, roundTableSeatLabel, sortSeatsPhysical } from './rankOrder';
-import { getTableDisplayNumber } from './tableNumber';
+import { getTableDisplayNumber, MAIN_TABLE_KEY } from './tableNumber';
 import {
   buildFloorRowSegments,
   buildStageRowSegments,
@@ -61,7 +61,7 @@ export function buildExportHeaderRows(
 
   return [
     [event.name],
-    ['嘉賓座位圖'],
+    ['嘉賓座位圖（Excel 視覺參考｜編輯請用「排位名單」）'],
     [dateLabel ? `日期：${dateLabel}\t${version}` : version],
     [
       [event.venue ? `地點：${event.venue}` : '', `資料來源:${dataSource}`]
@@ -374,6 +374,125 @@ function appendLongTableFloorRow(
   result.rowHeights[detailRow] = Math.max(36, maxLines * 15);
 }
 
+function formatRoundSeatCell(seat: Seat, view: SeatingView, sub: SeatingPlan): string {
+  const num = seatNum(seat, sub);
+  const name = guestName(view.guests, view.assignments[seat.id]?.guestId ?? null);
+  return name ? `${num}\n${name}` : `${num}\n（空）`;
+}
+
+/**
+ * 將圓桌座位投影到方格（近似畫面順時針／12 點起），中心放桌號。
+ * Excel 無法畫正圓，此為視覺參考用。
+ */
+function buildRoundTableGrid(
+  seats: Seat[],
+  tableLabel: string,
+  view: SeatingView,
+  sub: SeatingPlan,
+): string[][] {
+  const sorted = [...seats].sort((a, b) => a.index - b.index);
+  const n = sorted.length;
+  if (n === 0) return [[tableLabel]];
+
+  const size = n <= 6 ? 3 : n <= 10 ? 5 : 7;
+  const center = Math.floor(size / 2);
+  const radius = center;
+  const grid: string[][] = Array.from({ length: size }, () => Array(size).fill(''));
+  grid[center][center] = tableLabel;
+
+  const occupied = new Set<string>([`${center},${center}`]);
+
+  sorted.forEach((seat, i) => {
+    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+    let row = Math.round(center + Math.sin(angle) * radius);
+    let col = Math.round(center + Math.cos(angle) * radius);
+    row = Math.max(0, Math.min(size - 1, row));
+    col = Math.max(0, Math.min(size - 1, col));
+
+    // 碰撞時沿圓周找最近空格
+    if (occupied.has(`${row},${col}`)) {
+      let placed = false;
+      for (let step = 1; step <= size && !placed; step++) {
+        for (let dr = -step; dr <= step && !placed; dr++) {
+          for (let dc = -step; dc <= step && !placed; dc++) {
+            const rr = Math.max(0, Math.min(size - 1, row + dr));
+            const cc = Math.max(0, Math.min(size - 1, col + dc));
+            const key = `${rr},${cc}`;
+            if (!occupied.has(key)) {
+              row = rr;
+              col = cc;
+              placed = true;
+            }
+          }
+        }
+      }
+    }
+
+    occupied.add(`${row},${col}`);
+    grid[row][col] = formatRoundSeatCell(seat, view, sub);
+  });
+
+  return grid;
+}
+
+/** 圓桌台下：每桌以方格近似環形，同排多桌橫向並排 */
+function appendRoundTableFloorRow(
+  result: LayoutExcelResult,
+  rowIndex: number,
+  tables: Record<number, Seat[]>,
+  view: SeatingView,
+  sub: SeatingPlan,
+  floorRowCount: number,
+): void {
+  const tableEntries = Object.entries(tables)
+    .map(([k, seats]) => [Number(k), seats] as const)
+    .sort(([a], [b]) => a - b);
+  if (tableEntries.length === 0) return;
+
+  const gapCols = 1;
+  const grids = tableEntries.map(([tableIdx, seats]) => {
+    const tableNum = getTableDisplayNumber(sub, rowIndex, tableIdx);
+    const label = `桌${tableNum}`;
+    return buildRoundTableGrid(seats, label, view, sub);
+  });
+
+  const gridH = Math.max(...grids.map((g) => g.length));
+  const gridWs = grids.map((g) => g[0]?.length ?? 0);
+  const totalCols =
+    gridWs.reduce((sum, w) => sum + w, 0) + gapCols * Math.max(0, grids.length - 1);
+
+  const title =
+    floorRowCount > 1
+      ? `（台下圓桌 — 第${rowIndex + 1}排）`
+      : '（台下圓桌）';
+  const titleRow = result.aoa.length;
+  result.aoa.push([title, ...Array(Math.max(0, totalCols - 1)).fill('')]);
+  if (totalCols > 1) {
+    result.merges.push({
+      s: { r: titleRow, c: 0 },
+      e: { r: titleRow, c: totalCols - 1 },
+    });
+  }
+
+  for (let r = 0; r < gridH; r++) {
+    const rowCells: string[] = [];
+    grids.forEach((grid, gi) => {
+      if (gi > 0) {
+        for (let g = 0; g < gapCols; g++) rowCells.push('');
+      }
+      const w = gridWs[gi];
+      for (let c = 0; c < w; c++) {
+        rowCells.push(grid[r]?.[c] ?? '');
+      }
+    });
+    const excelRow = result.aoa.length;
+    result.aoa.push(rowCells);
+    result.rowHeights[excelRow] = 32;
+  }
+
+  result.aoa.push(['']);
+}
+
 export function buildVisualLayout(
   view: SeatingView,
   sub: SeatingPlan,
@@ -418,11 +537,34 @@ export function buildVisualLayout(
   }
 
   if (grouped.main.length > 0) {
-    appendSeatBlock(result, '（主枱嘉賓座位）', grouped.main, view, sub, anchorCol);
+    const headIsRound =
+      sub.venueConfig.type === 'banquet' && sub.venueConfig.headTableShape === 'round';
+    if (headIsRound) {
+      const label = String(sub.customTableNumbers?.[MAIN_TABLE_KEY] ?? '主桌');
+      const grid = buildRoundTableGrid(grouped.main, label, view, sub);
+      const titleRow = result.aoa.length;
+      const cols = grid[0]?.length ?? 1;
+      result.aoa.push(['（主枱嘉賓座位）', ...Array(Math.max(0, cols - 1)).fill('')]);
+      if (cols > 1) {
+        result.merges.push({ s: { r: titleRow, c: 0 }, e: { r: titleRow, c: cols - 1 } });
+      }
+      grid.forEach((row) => {
+        const excelRow = result.aoa.length;
+        result.aoa.push(row);
+        result.rowHeights[excelRow] = 32;
+      });
+      result.aoa.push(['']);
+    } else {
+      appendSeatBlock(result, '（主枱嘉賓座位）', grouped.main, view, sub, anchorCol);
+    }
   }
 
   if (Object.keys(grouped.floorByRowTable).length > 0) {
     const floorRowCount = Object.keys(grouped.floorByRowTable).length;
+    const useRoundTableExport =
+      isBanquetLayout(view) &&
+      view.venueConfig.type === 'banquet' &&
+      view.venueConfig.guestTableShape === 'round';
     Object.entries(grouped.floorByRowTable)
       .sort(([a], [b]) => Number(a) - Number(b))
       .forEach(([rowKey, tables]) => {
@@ -430,6 +572,10 @@ export function buildVisualLayout(
         const gapCols = getRowAisleGap(config, row, 'floor');
         if (useLongRowExport) {
           appendLongTableFloorRow(result, row, tables, view, sub, anchorCol, gapCols);
+          return;
+        }
+        if (useRoundTableExport) {
+          appendRoundTableFloorRow(result, row, tables, view, sub, floorRowCount);
           return;
         }
 
@@ -464,10 +610,20 @@ export function buildVisualLayout(
 
   const vipSeats = sortSeatsPhysical(view.seats.filter((s) => s.zone === 'vip'));
   if (vipSeats.length > 0 && sub.vipLounge?.enabled) {
-    appendSeatBlock(result, '（VIP 休息室）', vipSeats, view, sub, anchorCol);
+    appendVipLoungeLayout(result, vipSeats, view, sub);
   }
 
   normalizeLayoutColumns(result);
+
+  // 圓桌格線略寬，方便顯示「座位號＋姓名」
+  if (
+    isBanquetLayout(view) &&
+    view.venueConfig.type === 'banquet' &&
+    view.venueConfig.guestTableShape === 'round' &&
+    result.colWidths.length > 0
+  ) {
+    result.colWidths = result.colWidths.map((w) => Math.max(w, 14));
+  }
 
   // 長枱整排匯出：第一欄為統計數字，略窄
   if (useLongRowExport && result.colWidths.length > 0) {
@@ -475,6 +631,78 @@ export function buildVisualLayout(
   }
 
   return result;
+}
+
+/** VIP 休息室：依畫布座標粗略排成方格（參考用） */
+function appendVipLoungeLayout(
+  result: LayoutExcelResult,
+  vipSeats: Seat[],
+  view: SeatingView,
+  sub: SeatingPlan,
+): void {
+  const items = sub.vipLounge?.items ?? [];
+  const seatItems = items.filter((i) => i.kind === 'seat');
+
+  if (seatItems.length === 0) {
+    appendSeatBlock(result, '（VIP 休息室）', vipSeats, view, sub, 0);
+    return;
+  }
+
+  const xs = seatItems.map((i) => i.x);
+  const ys = seatItems.map((i) => i.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const cols = Math.min(8, Math.max(3, Math.round((maxX - minX) / 100) + 1));
+  const rows = Math.min(8, Math.max(3, Math.round((maxY - minY) / 80) + 1));
+
+  const grid: string[][] = Array.from({ length: rows }, () => Array(cols).fill(''));
+  const seatById = new Map(vipSeats.map((s) => [s.id, s]));
+
+  seatItems.forEach((item) => {
+    const seat = seatById.get(item.id);
+    if (!seat) return;
+    const col =
+      maxX === minX
+        ? Math.floor(cols / 2)
+        : Math.min(cols - 1, Math.max(0, Math.round(((item.x - minX) / (maxX - minX)) * (cols - 1))));
+    const row =
+      maxY === minY
+        ? Math.floor(rows / 2)
+        : Math.min(rows - 1, Math.max(0, Math.round(((item.y - minY) / (maxY - minY)) * (rows - 1))));
+
+    let r = row;
+    let c = col;
+    if (grid[r][c]) {
+      outer: for (let step = 1; step < Math.max(rows, cols); step++) {
+        for (let dr = -step; dr <= step; dr++) {
+          for (let dc = -step; dc <= step; dc++) {
+            const rr = r + dr;
+            const cc = c + dc;
+            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols && !grid[rr][cc]) {
+              r = rr;
+              c = cc;
+              break outer;
+            }
+          }
+        }
+      }
+    }
+    grid[r][c] = formatRoundSeatCell(seat, view, sub);
+  });
+
+  const titleRow = result.aoa.length;
+  result.aoa.push(['（VIP 休息室）', ...Array(Math.max(0, cols - 1)).fill('')]);
+  if (cols > 1) {
+    result.merges.push({ s: { r: titleRow, c: 0 }, e: { r: titleRow, c: cols - 1 } });
+  }
+  grid.forEach((row) => {
+    const excelRow = result.aoa.length;
+    result.aoa.push(row);
+    result.rowHeights[excelRow] = 32;
+  });
+  result.aoa.push(['']);
 }
 
 export function buildLayoutRows(

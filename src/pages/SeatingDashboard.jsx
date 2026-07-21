@@ -691,17 +691,28 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
             <Save size={16} />
             <span>{isDirty ? '未儲存' : '儲存'}</span>
           </button>
-          <button type="button" className="btn btn-export btn-sm" onClick={() => exportSeatingListExcel(subEventMeta, plan, guests)}>
+          <button
+            type="button"
+            className="btn btn-export btn-sm"
+            title="可編輯主檔：全部座位／已排／未排（下載後可自行修改，不會匯回系統）"
+            onClick={() => exportSeatingListExcel(subEventMeta, plan, guests)}
+          >
             <FileSpreadsheet size={16} />
-            <span>名冊</span>
+            <span>排位名單</span>
           </button>
-          <button type="button" className="btn btn-export btn-sm" onClick={() => exportSeatingLayoutExcel(subEventMeta, plan, guests)}>
+          <button
+            type="button"
+            className="btn btn-export btn-sm"
+            title="視覺參考圖：盡量接近畫面（圓桌等非 1:1）；編輯請用排位名單"
+            onClick={() => exportSeatingLayoutExcel(subEventMeta, plan, guests)}
+          >
             <FileSpreadsheet size={16} />
             <span>排位圖 Excel</span>
           </button>
           <button
             type="button"
             className="btn btn-print btn-sm"
+            title="截取目前畫面上的排位圖"
             onClick={async () => {
               setToast('正在匯出 PDF…');
               try {
