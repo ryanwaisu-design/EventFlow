@@ -36,6 +36,7 @@ export default function Invitations() {
   const [addModal, setAddModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
   const [addSearch, setAddSearch] = useState('');
+  const [addCategoryFilter, setAddCategoryFilter] = useState('');
   const [addSelected, setAddSelected] = useState(new Set());
 
   const eventId = selectedEventId || events[0]?.id || '';
@@ -76,10 +77,28 @@ export default function Invitations() {
   const existingGuestIds = new Set(records.map((r) => r.guestId));
   const availableGuests = guests.filter((g) => {
     if (existingGuestIds.has(g.id)) return false;
+    if (addCategoryFilter && g.category !== addCategoryFilter) return false;
     const aff = getPrimaryAffiliation(g);
     const q = addSearch.toLowerCase();
-    return !q || g.name?.toLowerCase().includes(q) || aff.organization?.toLowerCase().includes(q);
+    return !q
+      || g.name?.toLowerCase().includes(q)
+      || aff.organization?.toLowerCase().includes(q)
+      || aff.title?.toLowerCase().includes(q);
   });
+
+  const openAddModal = () => {
+    setAddSearch('');
+    setAddCategoryFilter('');
+    setAddSelected(new Set());
+    setAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setAddModal(false);
+    setAddSearch('');
+    setAddCategoryFilter('');
+    setAddSelected(new Set());
+  };
 
   const toggleSelect = (guestId) => {
     setSelected((prev) => {
@@ -107,8 +126,7 @@ export default function Invitations() {
 
   const handleAddGuests = () => {
     addGuestsToEvent(eventId, [...addSelected]);
-    setAddSelected(new Set());
-    setAddModal(false);
+    closeAddModal();
   };
 
   const toggleAddSelect = (id) => {
@@ -265,7 +283,7 @@ export default function Invitations() {
               className="hidden"
               onChange={handleImportInvitationList}
             />
-            <button onClick={() => setAddModal(true)} className="btn-primary">＋ 添加嘉賓</button>
+            <button onClick={openAddModal} className="btn-primary">＋ 添加嘉賓</button>
             <button onClick={() => navigate('seating', eventId)} className="btn-secondary">⊞ 活動排位</button>
           </div>
         </div>
@@ -302,7 +320,7 @@ export default function Invitations() {
       )}
 
       {filtered.length === 0 ? (
-        <EmptyState icon="✉" title="尚無邀請記錄" description="從嘉賓資料庫添加擬邀請嘉賓" action={<button onClick={() => setAddModal(true)} className="btn-primary">添加嘉賓</button>} />
+        <EmptyState icon="✉" title="尚無邀請記錄" description="從嘉賓資料庫添加擬邀請嘉賓" action={<button onClick={openAddModal} className="btn-primary">添加嘉賓</button>} />
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
@@ -350,8 +368,21 @@ export default function Invitations() {
         </div>
       )}
 
-      <Modal open={addModal} onClose={() => setAddModal(false)} title="添加嘉賓" wide>
-        <input className="input mb-4" placeholder="搜尋嘉賓..." value={addSearch} onChange={(e) => setAddSearch(e.target.value)} />
+      <Modal open={addModal} onClose={closeAddModal} title="添加嘉賓" wide>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <input
+            className="input flex-1"
+            placeholder="搜尋姓名或單位..."
+            value={addSearch}
+            onChange={(e) => setAddSearch(e.target.value)}
+          />
+          <CategoryFilterSelect
+            categories={guestCategories}
+            value={addCategoryFilter}
+            onChange={setAddCategoryFilter}
+            className="sm:w-40"
+          />
+        </div>
         <div className="max-h-80 overflow-y-auto space-y-2 mb-4">
           {availableGuests.map((g) => {
             const aff = getPrimaryAffiliation(g);
@@ -359,9 +390,10 @@ export default function Invitations() {
               <label key={g.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-card-hover cursor-pointer">
                 <input type="checkbox" checked={addSelected.has(g.id)} onChange={() => toggleAddSelect(g.id)} />
                 <GuestAvatar guest={g} size="sm" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-primary">{g.name}</p>
-                  <p className="text-xs text-muted">{aff.organization}</p>
+                  <div className="mt-0.5"><CategoryTag category={g.category} subcategory={g.subcategory} small /></div>
+                  <p className="text-xs text-muted mt-0.5 truncate">{aff.organization}{aff.title ? `／${aff.title}` : ''}</p>
                 </div>
               </label>
             );
@@ -369,8 +401,8 @@ export default function Invitations() {
           {availableGuests.length === 0 && <p className="text-muted text-center py-4">沒有可添加的嘉賓</p>}
         </div>
         <div className="flex justify-end gap-3">
-          <button onClick={() => setAddModal(false)} className="btn-secondary">取消</button>
-          <button onClick={handleAddGuests} disabled={!addSelected.size} className="btn-primary disabled:opacity-50">添加 {addSelected.size} 位</button>
+          <button type="button" onClick={closeAddModal} className="btn-secondary">取消</button>
+          <button type="button" onClick={handleAddGuests} disabled={!addSelected.size} className="btn-primary disabled:opacity-50">添加 {addSelected.size} 位</button>
         </div>
       </Modal>
 

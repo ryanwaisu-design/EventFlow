@@ -34,6 +34,7 @@ import { useHistoryStore } from '../seating/store/historyStore';
 import SeatingChart from '../seating/components/seating/SeatingChart';
 import VipLoungeCanvas from '../seating/components/seating/VipLoungeCanvas';
 import PanZoomCanvas, { scrollHighlightIntoView } from '../seating/components/PanZoomCanvas';
+import { snapCenterToCursor } from '../seating/utils/dndModifiers';
 import { useUnsavedGuard } from '../seating/hooks/useUnsavedGuard';
 import {
   buildSeatingContext,
@@ -47,6 +48,7 @@ import {
   getAssignedGuests,
   buildGuestSeatIndex,
   getSeatOccupancyStats,
+  guestIsVipEligible,
   participantGuests,
   isAudienceSeat,
   isStageSeat,
@@ -95,6 +97,7 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
     removeVipItem,
     moveVipItem,
     alignVipItems,
+    setGuestVipEligible,
   } = useSeatingWorkspaceStore();
 
   const { push, undo, redo, canUndo, canRedo, clear: clearHistory } = useHistoryStore();
@@ -268,6 +271,12 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
     () => (seatingCtx ? getUnassignedGuests(seatingCtx, seatingMode, seatIndex) : []),
     [seatingCtx, seatingMode, seatIndex],
   );
+
+  /** VIP 模式：已出席但尚未勾選可進入休息室的嘉賓（可在此直接勾選） */
+  const vipNotEligible = useMemo(() => {
+    if (!seatingCtx || seatingMode !== 'vip') return [];
+    return participantGuests(seatingCtx).filter((g) => !guestIsVipEligible(seatingCtx, g.id));
+  }, [seatingCtx, seatingMode]);
 
   const assigned = useMemo(
     () => (assignedGuestsOpen && seatingCtx ? getAssignedGuests(seatingCtx, seatingMode, seatIndex) : []),
@@ -817,13 +826,46 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
                     );
                   })}
                 </ul>
-                {unassigned.length === 0 && (
+                {unassigned.length === 0 && seatingMode === 'vip' && vipNotEligible.length > 0 && (
+                  <p className="guest-list-empty-hint">
+                    尚未勾選可進入 VIP 休息室的嘉賓。請在下方勾選，或到設定頁「嘉賓子活動出席」勾選 VIP。
+                  </p>
+                )}
+                {unassigned.length === 0 && seatingMode !== 'vip' && (
                   <p className="guest-list-empty-hint">所有嘉賓皆已排位</p>
+                )}
+                {unassigned.length === 0 && seatingMode === 'vip' && vipNotEligible.length === 0 && (
+                  <p className="guest-list-empty-hint">所有 VIP 嘉賓皆已排位</p>
                 )}
                 {unassigned.length > 0 && visibleUnassigned.length === 0 && (
                   <p className="guest-list-empty-hint">沒有符合搜尋的未排位嘉賓</p>
                 )}
               </>
+            )}
+
+            {seatingMode === 'vip' && vipNotEligible.length > 0 && (
+              <div className="guest-section vip-eligible-section">
+                <p className="guest-section-caption">勾選可進入 VIP 休息室</p>
+                <ul className="guest-list">
+                  {vipNotEligible.map((g) => (
+                    <li key={g.id} className="vip-eligible-row">
+                      <label className="vip-eligible-label">
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          onChange={(e) => {
+                            if (!plan?.currentSubEventId || !e.target.checked) return;
+                            recordHistory();
+                            setGuestVipEligible(g.id, plan.currentSubEventId, true);
+                          }}
+                          aria-label={`允許 ${g.name} 進入 VIP 休息室`}
+                        />
+                        <strong>{g.name}</strong>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <div className="guest-section assigned-section">
@@ -892,26 +934,27 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
               </div>
             )}
           </div>
-          <PanZoomCanvas>
-            {chartReady ? (
-              <DndContext
-                sensors={sensors}
-                onDragStart={(e) => {
-                  if (isDragDisabled) return;
-                  const guestId = e.active.data.current?.guestId;
-                  if (guestId) setDragGuestName(guests.find((g) => g.id === guestId)?.name ?? null);
-                }}
-                onDragEnd={(e) => {
-                  setDragGuestName(null);
-                  if (isDragDisabled) return;
-                  const fromSeatId = e.active.data.current?.seatId;
-                  const toSeatId = e.over?.data.current?.seatId;
-                  if (fromSeatId && toSeatId && fromSeatId !== toSeatId && canSwapSeats(seatingCtx, fromSeatId, toSeatId)) {
-                    recordHistory();
-                    swapSeats(fromSeatId, toSeatId);
-                  }
-                }}
-              >
+          {chartReady ? (
+            <DndContext
+              sensors={sensors}
+              onDragStart={(e) => {
+                if (isDragDisabled) return;
+                const guestId = e.active.data.current?.guestId;
+                if (guestId) setDragGuestName(guests.find((g) => g.id === guestId)?.name ?? null);
+              }}
+              onDragEnd={(e) => {
+                setDragGuestName(null);
+                if (isDragDisabled) return;
+                const fromSeatId = e.active.data.current?.seatId;
+                const toSeatId = e.over?.data.current?.seatId;
+                if (fromSeatId && toSeatId && fromSeatId !== toSeatId && canSwapSeats(seatingCtx, fromSeatId, toSeatId)) {
+                  recordHistory();
+                  swapSeats(fromSeatId, toSeatId);
+                }
+              }}
+              onDragCancel={() => setDragGuestName(null)}
+            >
+              <PanZoomCanvas>
                 <div className="seating-chart" id="seating-chart-export">
                   {seatingMode === 'vip' && hasVipLounge ? (
                     <div className="seating-zone vip-zone">
@@ -974,12 +1017,16 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
                     />
                   )}
                 </div>
-                <DragOverlay>{dragGuestName && <div className="drag-overlay">{dragGuestName}</div>}</DragOverlay>
-              </DndContext>
-            ) : (
+              </PanZoomCanvas>
+              <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+                {dragGuestName ? <div className="drag-overlay">{dragGuestName}</div> : null}
+              </DragOverlay>
+            </DndContext>
+          ) : (
+            <PanZoomCanvas>
               <div className="chart-loading"><p>載入排位圖…</p></div>
-            )}
-          </PanZoomCanvas>
+            </PanZoomCanvas>
+          )}
         </div>
       </div>
 

@@ -58,17 +58,22 @@ export default function GuestSubEventMatrix({ eventId, guests }) {
 
   return (
     <div className="overflow-x-auto">
+      {subEvents.some((s) => s.vipLounge?.enabled) && (
+        <p className="text-xs text-muted mb-3">
+          已開啟 VIP 休息室的子活動會顯示「VIP」勾選；勾選後該嘉賓才可排入休息室座位。
+        </p>
+      )}
       <table className="w-full text-sm border-collapse min-w-[520px]">
         <thead>
           <tr className="border-b border-border text-left text-muted">
             <th className="p-2 font-medium">嘉賓</th>
             {subEvents.map((sub) => (
-              <th key={sub.id} className="p-2 font-medium text-center min-w-[96px]">
+              <th key={sub.id} className="p-2 font-medium text-center min-w-[110px]">
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-xs leading-tight">{sub.name || '子活動'}</span>
-                  <span className="text-[10px] text-muted">出席人數</span>
+                  <span className="text-[10px] text-muted">出席 · 人數</span>
                   {sub.vipLounge?.enabled && (
-                    <span className="text-[10px] text-muted">VIP</span>
+                    <span className="text-[10px] font-semibold text-accent">+ VIP 休息室</span>
                   )}
                   <button
                     type="button"
@@ -125,7 +130,13 @@ export default function GuestSubEventMatrix({ eventId, guests }) {
                           </label>
                         )}
                         {participates && sub.vipLounge?.enabled && (
-                          <label className="flex items-center gap-1 text-[10px] text-muted">
+                          <label
+                            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] ${
+                              vipEligible
+                                ? 'bg-accent/10 text-accent font-medium'
+                                : 'bg-bg text-muted border border-border'
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               className="w-3.5 h-3.5 accent-accent"
@@ -133,7 +144,7 @@ export default function GuestSubEventMatrix({ eventId, guests }) {
                               onChange={(e) => setGuestVipEligible(guest.id, sub.id, e.target.checked)}
                               aria-label={`${guest.name} VIP 休息室 ${sub.name || '子活動'}`}
                             />
-                            <span>VIP</span>
+                            <span>VIP 休息室</span>
                           </label>
                         )}
                       </div>

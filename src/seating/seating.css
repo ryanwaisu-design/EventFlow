@@ -550,6 +550,35 @@
   color: var(--text-muted);
 }
 
+.guest-section-caption {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.vip-eligible-section .guest-list {
+  margin-top: 0;
+}
+
+.vip-eligible-row {
+  list-style: none;
+}
+
+.vip-eligible-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.vip-eligible-label input {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
 .guest-section-toggle {
   display: flex;
   align-items: center;

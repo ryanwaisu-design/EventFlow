@@ -658,7 +658,7 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
               <h3 className="section-title">嘉賓子活動出席</h3>
               <p className="text-sm text-muted mt-1">
                 {guestMatrixOpen
-                  ? '勾選嘉賓將出席哪些子活動，並設定各子活動的出席人數（預設 1 人）；僅已勾選的嘉賓可進入該子活動排位'
+                  ? '勾選嘉賓將出席哪些子活動，並設定出席人數；若子活動已開 VIP 休息室，再勾選「VIP 休息室」後才可排入'
                   : attendingGuestCount > 0
                     ? `已收起 · 共 ${attendingGuestCount} 位出席嘉賓`
                     : '已收起 · 請先在「邀請與出席」確認嘉賓出席'}
