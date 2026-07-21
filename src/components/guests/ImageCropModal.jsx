@@ -5,6 +5,7 @@ import {
   loadImageElement,
   drawCropToCanvas,
   getCropPanLimits,
+  buildPhotoFilter,
   CROP_WIDTH,
   CROP_HEIGHT,
   CROP_RATIO_LABEL,
@@ -61,7 +62,7 @@ export default function ImageCropModal({
     saturate: DEFAULT_PHOTO_ADJUST.saturate,
   });
 
-  const cropOptions = useCallback(() => ({
+  const cropOptions = useCallback((overrides = {}) => ({
     scale: cropParamsRef.current.scale,
     offsetX: cropParamsRef.current.offsetX,
     offsetY: cropParamsRef.current.offsetY,
@@ -71,6 +72,7 @@ export default function ImageCropModal({
     fit: 'contain',
     outputWidth: CROP_WIDTH,
     outputHeight: CROP_HEIGHT,
+    ...overrides,
   }), []);
 
   const clampOffset = useCallback((x, y, limits = panLimits) => ({
@@ -78,12 +80,19 @@ export default function ImageCropModal({
     y: Math.max(-limits.maxPanY, Math.min(limits.maxPanY, y)),
   }), [panLimits]);
 
+  /** 預覽：只重繪裁切，修圖用 CSS filter（Safari 也即時可見） */
   const paintEditor = useCallback(() => {
     const img = imgRef.current;
     const canvas = editorCanvasRef.current;
     if (!img || !canvas) return;
-    drawCropToCanvas(canvas, img, cropOptions());
+    drawCropToCanvas(canvas, img, cropOptions({ bakeAdjust: false }));
   }, [cropOptions]);
+
+  const liveCssFilter = buildPhotoFilter({
+    brightness: sliderToFactor(brightness),
+    contrast: sliderToFactor(contrast),
+    saturate: sliderToFactor(saturate),
+  });
 
   const scheduleFramePreview = useCallback((immediate = false) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
@@ -247,8 +256,13 @@ export default function ImageCropModal({
     }
     setLoading(true);
     try {
-      paintEditor();
-      const dataUrl = editorCanvasRef.current?.toDataURL('image/jpeg', 0.88) || framePreview;
+      const img = imgRef.current;
+      const canvas = editorCanvasRef.current;
+      if (!img || !canvas) throw new Error('裁切失敗');
+      // 匯出時把修圖寫入像素（不依賴 CSS / ctx.filter）
+      drawCropToCanvas(canvas, img, cropOptions({ bakeAdjust: true }));
+      canvas.style.filter = 'none';
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.88) || framePreview;
       if (!dataUrl) throw new Error('裁切失敗');
       onConfirm(dataUrl, {
         photoSourceUrl: sourceUrl.trim(),
@@ -257,6 +271,11 @@ export default function ImageCropModal({
       onClose();
     } catch (e) {
       setError(e.message || '裁切失敗');
+      // 恢復即時預覽 filter
+      if (editorCanvasRef.current) {
+        editorCanvasRef.current.style.filter = liveCssFilter;
+      }
+      paintEditor();
     } finally {
       setLoading(false);
     }
@@ -302,6 +321,7 @@ export default function ImageCropModal({
               width={CROP_WIDTH}
               height={CROP_HEIGHT}
               className="w-full h-full pointer-events-none"
+              style={{ filter: liveCssFilter }}
             />
             {!imageReady && (
               <div className="absolute inset-0 flex items-center justify-center text-muted text-sm bg-bg">
