@@ -28,7 +28,10 @@ export function getBanquetFloorAisleGap(config: BanquetVenueConfig, row: number)
 }
 
 export function getStageRowAisleGap(
-  config: StageSettings | StageVenueConfig,
+  config: {
+    rowAisleGap?: number;
+    stageRowOverrides?: StageSettings['stageRowOverrides'];
+  },
   row: number,
 ): number {
   const raw = config.stageRowOverrides?.[row]?.rowAisleGap ?? config.rowAisleGap ?? 1;
@@ -42,7 +45,7 @@ export function getRowAisleGap(
   zone: 'floor' | 'stage',
 ): number {
   if (zone === 'stage') {
-    if (config.type === 'stage') return getStageRowAisleGap(config, row);
+    if (config.type === 'stage' || config.type === 'signing') return getStageRowAisleGap(config, row);
     if (config.type === 'banquet' || config.type === 'theater') {
       return config.hasStage ? getStageRowAisleGap(config, row) : 0;
     }
@@ -50,7 +53,7 @@ export function getRowAisleGap(
   }
 
   if (config.type === 'banquet') return getBanquetFloorAisleGap(config, row);
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     const raw = config.rowOverrides?.[row]?.rowAisleGap ?? config.rowAisleGap ?? 1;
     return clampGap(raw);
   }
@@ -64,7 +67,7 @@ export function getRowSeatsPerSegment(
   zone: 'floor' | 'stage',
 ): number {
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       return clampSeatsPerSegment(
         config.stageRowOverrides?.[row]?.rowSeatsPerSegment ?? config.rowSeatsPerSegment ?? 0,
       );
@@ -77,7 +80,7 @@ export function getRowSeatsPerSegment(
     return 0;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     return clampSeatsPerSegment(
       config.rowOverrides?.[row]?.rowSeatsPerSegment ?? config.rowSeatsPerSegment ?? 0,
     );
@@ -93,7 +96,7 @@ export function getRowSegmentCount(
   zone: 'floor' | 'stage',
 ): number {
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       return clampSegmentCount(
         config.stageRowOverrides?.[row]?.rowSegmentCount ?? config.rowSegmentCount ?? 1,
       );
@@ -106,7 +109,7 @@ export function getRowSegmentCount(
     return 1;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     return clampSegmentCount(
       config.rowOverrides?.[row]?.rowSegmentCount ?? config.rowSegmentCount ?? 1,
     );
@@ -147,12 +150,13 @@ export function getRowAisleBreakAfterIndex(
   let raw: number[] | undefined;
 
   if (zone === 'stage') {
-    if (config.type === 'stage') {
-      raw = config.stageRowOverrides?.[row]?.rowAisleBreakAfterIndex ?? config.rowAisleBreakAfterIndex;
+    if (config.type === 'stage' || config.type === 'signing') {
+      raw = config.stageRowOverrides?.[row]?.rowAisleBreakAfterIndex
+        ?? ('rowAisleBreakAfterIndex' in config ? config.rowAisleBreakAfterIndex : undefined);
     } else if ((config.type === 'banquet' || config.type === 'theater') && config.hasStage) {
       raw = config.stageRowOverrides?.[row]?.rowAisleBreakAfterIndex;
     }
-  } else if (config.type === 'theater') {
+  } else if (config.type === 'theater' || config.type === 'signing') {
     raw = config.rowOverrides?.[row]?.rowAisleBreakAfterIndex;
   }
 
@@ -163,7 +167,7 @@ export function getRowAisleBreakAfterIndex(
 }
 
 export function canPlaceRowAisleBreaks(config: VenueConfig): boolean {
-  if (config.type === 'stage' || config.type === 'theater') return true;
+  if (config.type === 'stage' || config.type === 'theater' || config.type === 'signing') return true;
   if (config.type === 'banquet' && config.hasStage) return true;
   return false;
 }
@@ -171,11 +175,11 @@ export function canPlaceRowAisleBreaks(config: VenueConfig): boolean {
 export function isSeatEligibleForAisleBreak(seat: Seat, config: VenueConfig): boolean {
   if (seat.zone === 'main') return false;
   if (seat.zone === 'stage') {
-    if (config.type === 'stage') return true;
+    if (config.type === 'stage' || config.type === 'signing') return true;
     if (config.type === 'banquet' || config.type === 'theater') return config.hasStage;
     return false;
   }
-  if (seat.zone === 'floor') return config.type === 'theater';
+  if (seat.zone === 'floor') return config.type === 'theater' || config.type === 'signing';
   return false;
 }
 
@@ -207,7 +211,7 @@ export function setRowAisleBreakAfterIndexOnConfig(
   const patch = { rowAisleBreakAfterIndex: normalized.length > 0 ? normalized : undefined };
 
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       config.stageRowOverrides = {
         ...config.stageRowOverrides,
         [row]: { ...config.stageRowOverrides?.[row], ...patch },
@@ -223,7 +227,7 @@ export function setRowAisleBreakAfterIndexOnConfig(
     return;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     config.rowOverrides = {
       ...config.rowOverrides,
       [row]: { ...config.rowOverrides?.[row], ...patch },
@@ -351,7 +355,7 @@ export function setRowAisleGapOnConfig(
 ): void {
   const gap = clampGap(value);
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       config.stageRowOverrides = {
         ...config.stageRowOverrides,
         [row]: { ...config.stageRowOverrides?.[row], rowAisleGap: gap },
@@ -378,7 +382,7 @@ export function setRowAisleGapOnConfig(
     return;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     config.rowOverrides = {
       ...config.rowOverrides,
       [row]: { ...config.rowOverrides?.[row], rowAisleGap: gap },
@@ -394,7 +398,7 @@ export function setRowSeatsPerSegmentOnConfig(
 ): void {
   const seatsPerSegment = clampSeatsPerSegment(value);
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       config.stageRowOverrides = {
         ...config.stageRowOverrides,
         [row]: { ...config.stageRowOverrides?.[row], rowSeatsPerSegment: seatsPerSegment },
@@ -410,7 +414,7 @@ export function setRowSeatsPerSegmentOnConfig(
     return;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     config.rowOverrides = {
       ...config.rowOverrides,
       [row]: { ...config.rowOverrides?.[row], rowSeatsPerSegment: seatsPerSegment },
@@ -427,7 +431,7 @@ export function setRowSegmentCountOnConfig(
 ): void {
   const count = clampSegmentCount(value);
   if (zone === 'stage') {
-    if (config.type === 'stage') {
+    if (config.type === 'stage' || config.type === 'signing') {
       config.stageRowOverrides = {
         ...config.stageRowOverrides,
         [row]: { ...config.stageRowOverrides?.[row], rowSegmentCount: count },
@@ -443,7 +447,7 @@ export function setRowSegmentCountOnConfig(
     return;
   }
 
-  if (config.type === 'theater') {
+  if (config.type === 'theater' || config.type === 'signing') {
     config.rowOverrides = {
       ...config.rowOverrides,
       [row]: { ...config.rowOverrides?.[row], rowSegmentCount: count },

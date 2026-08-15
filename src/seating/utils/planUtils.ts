@@ -1,5 +1,10 @@
 import type { BanquetVenueConfig, GuestParticipation, SeatingPlan, VenueConfig, VenueType } from '../types';
-import { normalizeBanquetConfig, normalizeBanquetTables, normalizeParticipation } from '../types';
+import {
+  normalizeBanquetConfig,
+  normalizeBanquetTables,
+  normalizeParticipation,
+  normalizeSigningConfig,
+} from '../types';
 import { generateAssignments, generateSeats, mergeAssignments } from './seatGenerator';
 
 export function defaultParticipation(guestId: string): GuestParticipation {
@@ -18,6 +23,9 @@ export function defaultParticipation(guestId: string): GuestParticipation {
 function prepareConfig(config: VenueConfig): VenueConfig {
   if (config.type === 'banquet') {
     return normalizeBanquetTables(normalizeBanquetConfig(config));
+  }
+  if (config.type === 'signing') {
+    return normalizeSigningConfig(config);
   }
   return config;
 }

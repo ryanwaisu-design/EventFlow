@@ -6,6 +6,7 @@ import type {
   GuestParticipation,
   SeatingPlan,
   Seat,
+  SigningVenueConfig,
   SubEvent,
   VenueConfig,
   VenueType,
@@ -28,7 +29,7 @@ import {
   sortSubEventsBySchedule,
   syncFlatToSubEvents,
 } from '../adapters/planSubEvent';
-import { defaultVenueConfig } from '../types';
+import { defaultVenueConfig, getSigningWitnessSeatsPerRow } from '../types';
 import {
   getAisleBreakAfterIndexBetweenSeats,
   getRowAisleGap,
@@ -528,6 +529,22 @@ export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get)
         ...config.rowOverrides,
         [row]: { seatsPerRow: Math.max(1, current + delta) },
       };
+    } else if (config.type === 'signing') {
+      const signing = config as SigningVenueConfig;
+      const perRow = getSigningWitnessSeatsPerRow(signing);
+      const current = perRow[row] ?? 1;
+      const next = Math.max(1, current + delta);
+      const rowOverrides = { ...signing.rowOverrides };
+      // 寫入各排實際座位數，避免只改一排時其他排被均分覆寫
+      perRow.forEach((n, i) => {
+        rowOverrides[i] = { ...rowOverrides[i], seatsPerRow: i === row ? next : n };
+      });
+      signing.rowOverrides = rowOverrides;
+      signing.witnessCount = Object.keys(rowOverrides)
+        .map((k) => rowOverrides[Number(k)]?.seatsPerRow ?? 0)
+        .reduce((sum, n) => sum + n, 0);
+      get().updateVenueConfig(signing);
+      return;
     } else if (config.type === 'banquet') {
       const banquet = config as BanquetVenueConfig;
       const rowDef = { ...banquet.rowOverrides?.[row] };
@@ -636,6 +653,18 @@ export const useSeatingWorkspaceStore = create<SeatingWorkspaceStore>((set, get)
     const plan = get().plan;
     if (!plan) return;
     const config = { ...plan.venueConfig };
+
+    if (config.type === 'signing') {
+      const current = config.stageRowOverrides?.[row]?.seatsPerRow ?? config.signerCount;
+      const next = Math.max(1, current + delta);
+      config.signerCount = next;
+      config.stageRowOverrides = {
+        ...config.stageRowOverrides,
+        [row]: { ...config.stageRowOverrides?.[row], seatsPerRow: next },
+      };
+      get().updateVenueConfig(config);
+      return;
+    }
 
     if (config.type === 'stage') {
       const current = config.stageRowOverrides?.[row]?.seatsPerRow ?? config.stageSeatsPerRow;

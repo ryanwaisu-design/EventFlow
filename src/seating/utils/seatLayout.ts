@@ -519,8 +519,10 @@ export function buildVisualLayout(
       .sort(([a], [b]) => Number(a) - Number(b))
       .forEach(([rowKey, seats]) => {
         const row = Number(rowKey);
-        const label =
-          Object.keys(grouped.stageByRow).length > 1
+        const isSigning = view.venueConfig.type === 'signing';
+        const label = isSigning
+          ? '（簽約席）'
+          : Object.keys(grouped.stageByRow).length > 1
             ? `（台上嘉賓座位 — 第${row + 1}排）`
             : '（台上嘉賓座位）';
         const segments = buildStageRowSegments(config, row, seats);
@@ -587,14 +589,18 @@ export function buildVisualLayout(
         appendGappedSeatBlock(result, label, segments, view, sub, anchorCol, gapCols);
       });
   } else if (Object.keys(grouped.floorByRow).length > 0) {
+    const isSigning = view.venueConfig.type === 'signing';
     Object.entries(grouped.floorByRow)
       .sort(([a], [b]) => Number(a) - Number(b))
       .forEach(([rowKey, seats]) => {
         const row = Number(rowKey);
-        const label =
-          Object.keys(grouped.floorByRow).length > 1
+        const label = isSigning
+          ? (Object.keys(grouped.floorByRow).length > 1
+            ? `（見證席 — 第${row + 1}排）`
+            : '（見證席）')
+          : (Object.keys(grouped.floorByRow).length > 1
             ? `（台下嘉賓座位 — 第${row + 1}排）`
-            : '（台下嘉賓座位）';
+            : '（台下嘉賓座位）');
         const segments = buildFloorRowSegments(config, row, seats);
         appendGappedSeatBlock(
           result,

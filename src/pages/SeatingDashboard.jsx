@@ -785,11 +785,11 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
           {(hasStageSeating || hasVipLounge) && (
             <div className="mode-tabs">
               <button type="button" className={`mode-tab ${seatingMode === 'audience' ? 'active' : ''}`} onClick={() => { setSeatingMode('audience'); setToolbarMode('normal'); setSelectedGuestId(null); }}>
-                <Users size={14} /> 台下排位
+                <Users size={14} /> {plan.venueType === 'signing' ? '見證排位' : '台下排位'}
               </button>
               {hasStageSeating && (
                 <button type="button" className={`mode-tab ${seatingMode === 'stage' ? 'active' : ''}`} onClick={() => { setSeatingMode('stage'); setToolbarMode('normal'); setSelectedGuestId(null); }}>
-                  <Mic2 size={14} /> 台上排位
+                  <Mic2 size={14} /> {plan.venueType === 'signing' ? '簽約排位' : '台上排位'}
                 </button>
               )}
               {hasVipLounge && (
@@ -929,7 +929,11 @@ export default function SeatingDashboard({ event, onBackToSetup }) {
           <div className="chart-panel-header no-print">
             <div className="chart-seat-stats">
               <span className="chart-seat-stats-mode">
-                {seatingMode === 'stage' ? '台上' : seatingMode === 'vip' ? 'VIP' : '台下'}
+                {seatingMode === 'stage'
+                  ? (plan.venueType === 'signing' ? '簽約' : '台上')
+                  : seatingMode === 'vip'
+                    ? 'VIP'
+                    : (plan.venueType === 'signing' ? '見證' : '台下')}
               </span>
               <span className="chart-seat-stats-value">
                 <strong>{seatStats.assigned}</strong>

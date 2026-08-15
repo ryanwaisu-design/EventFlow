@@ -50,19 +50,23 @@ function seatNumber(seat: Seat, plan: SeatingPlan): string {
   return String(seat.customNumber ?? seat.displayNumber);
 }
 
-function seatZoneLabel(seat: Seat): string {
-  if (seat.zone === 'stage') return '台上';
+function seatZoneLabel(seat: Seat, plan?: SeatingPlan): string {
+  if (seat.zone === 'stage') return plan?.venueConfig.type === 'signing' ? '簽約席' : '台上';
   if (seat.zone === 'main') return '主桌';
   if (seat.zone === 'vip') return 'VIP 休息室';
-  return '台下';
+  return plan?.venueConfig.type === 'signing' ? '見證席' : '台下';
 }
 
 function seatLocationLabel(seat: Seat, plan: SeatingPlan): string {
   if (seat.zone === 'stage') {
+    if (plan.venueConfig.type === 'signing') return '簽約席';
     return seat.row !== undefined ? `第${seat.row + 1}排` : '台上';
   }
   if (seat.zone === 'main') return '主桌';
   if (seat.zone === 'vip') return 'VIP 休息室';
+  if (plan.venueConfig.type === 'signing') {
+    return seat.row !== undefined ? `見證 第${seat.row + 1}排` : '見證席';
+  }
   if (seat.table !== undefined) {
     const tableNum = getTableDisplayNumber(plan, seat.row ?? 0, seat.table);
     return `第${(seat.row ?? 0) + 1}排 · 桌${tableNum}`;
@@ -114,7 +118,7 @@ function buildSeatListRow(seat: Seat, plan: SeatingPlan, guests: Guest[]) {
   const assignment = plan.assignments[seat.id];
   const guestId = assignment?.guestId ?? null;
   return {
-    區域: seatZoneLabel(seat),
+    區域: seatZoneLabel(seat, plan),
     位置: seatLocationLabel(seat, plan),
     桌號: seatTableLabel(seat, plan),
     座位編號: seatNumber(seat, plan),

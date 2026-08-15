@@ -71,6 +71,7 @@ export default memo(function SeatingChart({
   const guestMap = useMemo(() => buildGuestMap(view.guests), [view.guests]);
   const highlightSet = useMemo(() => new Set(highlightGuestIds), [highlightGuestIds]);
   const banquet = isBanquetLayout(view);
+  const isSigning = view.venueConfig.type === 'signing';
   const tableShape = view.venueConfig.type === 'banquet' ? view.venueConfig.guestTableShape : 'round';
   const headTableShape =
     view.venueConfig.type === 'banquet' ? view.venueConfig.headTableShape : 'round';
@@ -81,6 +82,9 @@ export default memo(function SeatingChart({
   const banquetConfig = venueConfig.type === 'banquet' ? venueConfig : null;
   const roundTableGapPx =
     tableShape === 'round' ? roundTableRowGap(seatsPerTable) : 8;
+  const stageZoneTitle = isSigning ? '簽約席' : '台上';
+  const stageBackdropLabel = isSigning ? '簽約台' : '舞台 / LED 顯示屏';
+  const audienceZoneTitle = isSigning ? '見證席' : '台下';
 
   const renderAisleSpacer = (row: number, zone: 'floor' | 'stage', key: string) => {
     const gap = getRowAisleGap(venueConfig, row, zone);
@@ -248,9 +252,9 @@ export default memo(function SeatingChart({
       {showStage && (
         <div className="seating-zone stage-zone">
           <div className="stage-backdrop">
-            <span>舞台 / LED 顯示屏</span>
+            <span>{stageBackdropLabel}</span>
           </div>
-          <h3 className="zone-label">台上 {seatingMode === 'stage' && <em className="mode-badge">編輯中</em>}</h3>
+          <h3 className="zone-label">{stageZoneTitle} {seatingMode === 'stage' && <em className="mode-badge">編輯中</em>}</h3>
           <div className="stage-rows">
             {Object.entries(grouped.stageByRow)
               .sort(([a], [b]) => Number(b) - Number(a))
@@ -260,8 +264,9 @@ export default memo(function SeatingChart({
                 <div key={rowKey} className="floor-row-group stage-row-item">
                   <div className="row-controls no-print">
                     <span>
-                      台上 第 {row + 1} 排
-                      {row === 0 ? '（近台下）' : '（近舞台）'}
+                      {isSigning
+                        ? '簽約席（一字排開）'
+                        : `台上 第 ${row + 1} 排${row === 0 ? '（近台下）' : '（近舞台）'}`}
                     </span>
                     <div className="row-adjust-group">
                       <span className="row-adjust-label">座位</span>
@@ -418,7 +423,7 @@ export default memo(function SeatingChart({
         Object.keys(grouped.floorByRow).length > 0 && (
           <div className="seating-zone">
             <h3 className="zone-label">
-              台下 {seatingMode === 'audience' && <em className="mode-badge">編輯中</em>}
+              {audienceZoneTitle} {seatingMode === 'audience' && <em className="mode-badge">編輯中</em>}
             </h3>
             {Object.entries(grouped.floorByRow)
               .sort(([a], [b]) => Number(a) - Number(b))
@@ -427,7 +432,7 @@ export default memo(function SeatingChart({
                 return (
                 <div key={rowKey} className="floor-row-group">
                   <div className="row-controls no-print">
-                    <span>第 {row + 1} 排</span>
+                    <span>{isSigning ? `見證 第 ${row + 1} 排` : `第 ${row + 1} 排`}</span>
                     <div className="row-adjust-group">
                       <span className="row-adjust-label">座位</span>
                       <div className="adjust-btns">

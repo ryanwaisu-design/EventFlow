@@ -2,12 +2,13 @@ import type {
   BanquetVenueConfig,
   Seat,
   SeatAssignment,
+  SigningVenueConfig,
   StageSettings,
   StageVenueConfig,
   TheaterVenueConfig,
   VenueConfig,
 } from '../types';
-import { normalizeBanquetConfig } from '../types';
+import { getSigningWitnessSeatsPerRow, normalizeBanquetConfig } from '../types';
 import { floorTableKey, MAIN_TABLE_KEY, parseFloorTableKey } from './tableNumber';
 import {
   getAudienceProtocolSequence,
@@ -301,6 +302,43 @@ function buildTheaterSeats(config: TheaterVenueConfig): Seat[] {
   return seats;
 }
 
+function buildSigningSeats(config: SigningVenueConfig): Seat[] {
+  const seats: Seat[] = [];
+  const signerCount = Math.max(1, Math.floor(Number(config.signerCount)) || 1);
+  const signerOverride = config.stageRowOverrides?.[0]?.seatsPerRow;
+  const signers = Math.max(1, signerOverride != null ? Math.floor(Number(signerOverride)) || 1 : signerCount);
+
+  const signerProtocol = getStageProtocolSequence(signers);
+  signerProtocol.forEach((displayNum, i) => {
+    seats.push({
+      id: `stage-r0-s${i}`,
+      label: `簽約 座${displayNum}`,
+      zone: 'stage',
+      row: 0,
+      index: i,
+      displayNumber: displayNum,
+    });
+  });
+
+  const perRow = getSigningWitnessSeatsPerRow(config);
+  perRow.forEach((seatsPerRow, row) => {
+    if (seatsPerRow <= 0) return;
+    const protocol = getAudienceProtocolSequence(seatsPerRow);
+    protocol.forEach((displayNum, i) => {
+      seats.push({
+        id: `floor-r${row}-s${i}`,
+        label: `見證 第${row + 1}排 座${displayNum}`,
+        zone: 'floor',
+        row,
+        index: i,
+        displayNumber: displayNum,
+      });
+    });
+  });
+
+  return seats;
+}
+
 export function generateSeats(config: VenueConfig): Seat[] {
   switch (config.type) {
     case 'banquet':
@@ -309,6 +347,8 @@ export function generateSeats(config: VenueConfig): Seat[] {
       return buildTheaterSeats(config);
     case 'stage':
       return buildStageSeatsFromSettings(config);
+    case 'signing':
+      return buildSigningSeats(config);
     default:
       return [];
   }

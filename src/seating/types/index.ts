@@ -1,4 +1,4 @@
-export type VenueType = 'banquet' | 'theater' | 'stage';
+export type VenueType = 'banquet' | 'theater' | 'stage' | 'signing';
 
 export type TableShape = 'round' | 'long';
 
@@ -126,7 +126,42 @@ export interface StageVenueConfig {
   >;
 }
 
-export type VenueConfig = BanquetVenueConfig | TheaterVenueConfig | StageVenueConfig;
+/** 簽約儀式：簽約席一字排開 + 見證席多排 */
+export interface SigningVenueConfig {
+  type: 'signing';
+  /** 簽約人數（一字排開） */
+  signerCount: number;
+  /** 見證嘉賓總人數 */
+  witnessCount: number;
+  /** 見證排數 */
+  witnessRowCount: number;
+  rowAisleGap?: number;
+  rowSeatsPerSegment?: number;
+  /** @deprecated */
+  rowSegmentCount?: number;
+  rowOverrides?: Record<
+    number,
+    {
+      seatsPerRow?: number;
+      rowAisleGap?: number;
+      rowSeatsPerSegment?: number;
+      rowSegmentCount?: number;
+      rowAisleBreakAfterIndex?: number[];
+    }
+  >;
+  stageRowOverrides?: Record<
+    number,
+    {
+      seatsPerRow?: number;
+      rowAisleGap?: number;
+      rowSeatsPerSegment?: number;
+      rowSegmentCount?: number;
+      rowAisleBreakAfterIndex?: number[];
+    }
+  >;
+}
+
+export type VenueConfig = BanquetVenueConfig | TheaterVenueConfig | StageVenueConfig | SigningVenueConfig;
 
 export interface Guest {
   id: string;
@@ -438,6 +473,15 @@ export function defaultVenueConfig(type: VenueType): VenueConfig {
         rowAisleGap: 1,
         rowSeatsPerSegment: 0,
       };
+    case 'signing':
+      return normalizeSigningConfig({
+        type: 'signing',
+        signerCount: 2,
+        witnessCount: 20,
+        witnessRowCount: 2,
+        rowAisleGap: 1,
+        rowSeatsPerSegment: 0,
+      });
   }
 }
 
@@ -505,6 +549,19 @@ export function migrateVenueConfig(config: unknown, venueType?: string): VenueCo
     };
   }
 
+  if (type === 'signing') {
+    return normalizeSigningConfig({
+      type: 'signing',
+      signerCount: Number(c.signerCount ?? 2),
+      witnessCount: Number(c.witnessCount ?? 20),
+      witnessRowCount: Number(c.witnessRowCount ?? 2),
+      rowAisleGap: Number(c.rowAisleGap ?? 1),
+      rowSeatsPerSegment: Number(c.rowSeatsPerSegment ?? 0),
+      rowOverrides: c.rowOverrides as SigningVenueConfig['rowOverrides'],
+      stageRowOverrides: c.stageRowOverrides as SigningVenueConfig['stageRowOverrides'],
+    });
+  }
+
   return {
     type: 'stage',
     stageRowCount: Number(c.stageRowCount ?? 1),
@@ -523,4 +580,38 @@ export function normalizeBanquetTables(config: BanquetVenueConfig): BanquetVenue
   }
   while (tablesPerRow.length > count) tablesPerRow.pop();
   return { ...config, floorRowCount: count, tablesPerRow };
+}
+
+/** 將總人數平均分到各排（餘數由前排多 1） */
+export function distributeSeatsAcrossRows(total: number, rows: number): number[] {
+  const rowCount = Math.max(0, Math.floor(Number(rows)) || 0);
+  const seatTotal = Math.max(0, Math.floor(Number(total)) || 0);
+  if (rowCount <= 0) return [];
+  const base = Math.floor(seatTotal / rowCount);
+  const rem = seatTotal % rowCount;
+  return Array.from({ length: rowCount }, (_, i) => base + (i < rem ? 1 : 0));
+}
+
+/** 簽約儀式：各排見證座位數（優先 rowOverrides） */
+export function getSigningWitnessSeatsPerRow(config: SigningVenueConfig): number[] {
+  const distributed = distributeSeatsAcrossRows(config.witnessCount, config.witnessRowCount);
+  return distributed.map((n, i) => {
+    const override = config.rowOverrides?.[i]?.seatsPerRow;
+    return override != null ? Math.max(0, Math.floor(Number(override)) || 0) : n;
+  });
+}
+
+export function normalizeSigningConfig(config: SigningVenueConfig): SigningVenueConfig {
+  const signerCount = Math.max(1, Math.floor(Number(config.signerCount)) || 1);
+  const witnessRowCount = Math.max(0, Math.floor(Number(config.witnessRowCount)) || 0);
+  const witnessCount = Math.max(0, Math.floor(Number(config.witnessCount)) || 0);
+  return {
+    ...config,
+    type: 'signing',
+    signerCount,
+    witnessCount,
+    witnessRowCount,
+    rowAisleGap: Math.max(0, Math.min(5, Math.floor(Number(config.rowAisleGap ?? 1)) || 0)),
+    rowSeatsPerSegment: Math.max(0, Math.floor(Number(config.rowSeatsPerSegment ?? 0)) || 0),
+  };
 }

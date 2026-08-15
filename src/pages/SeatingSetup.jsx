@@ -8,7 +8,7 @@ import {
   removedGuestMessage,
   venueResetMessage,
 } from '../seating/utils/enterDashboard';
-import { normalizeBanquetTables, defaultVenueConfig } from '../seating/types';
+import { normalizeBanquetTables, defaultVenueConfig, getSigningWitnessSeatsPerRow } from '../seating/types';
 import { useSeatingWorkspaceStore } from '../seating/store/seatingWorkspaceStore';
 import SubEventSetupPanel from '../components/seating/SubEventSetupPanel';
 import GuestSubEventMatrix from '../components/seating/GuestSubEventMatrix';
@@ -20,6 +20,7 @@ const VENUE_TYPES = [
   { id: 'banquet', label: '宴會', desc: '主桌 + 圓桌 / 長桌' },
   { id: 'theater', label: '活動 / 會議', desc: '劇院式排列' },
   { id: 'stage', label: '舞台 / 合影', desc: '僅台上座位' },
+  { id: 'signing', label: '簽約儀式', desc: '簽約席 + 見證席' },
 ];
 
 function ConfigSection({ title, description, children }) {
@@ -551,6 +552,81 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
       );
     }
 
+    if (config.type === 'signing') {
+      const perRow = getSigningWitnessSeatsPerRow(config);
+      const avgPerRow =
+        config.witnessRowCount > 0
+          ? Math.ceil(config.witnessCount / config.witnessRowCount)
+          : 0;
+      return (
+        <div className="space-y-5">
+          <ConfigSection
+            title="簽約儀式"
+            description="簽約席一字排開於前方；見證嘉賓分多排就座"
+          >
+            <div className="grid sm:grid-cols-3 gap-4">
+              <FormField label="簽約人數（一字排開）" className="mb-0">
+                <Input
+                  type="number"
+                  min={1}
+                  value={config.signerCount}
+                  onChange={(e) =>
+                    updateVenueConfig({
+                      ...config,
+                      signerCount: Math.max(1, Number(e.target.value) || 1),
+                      stageRowOverrides: undefined,
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="見證嘉賓人數" className="mb-0">
+                <Input
+                  type="number"
+                  min={0}
+                  value={config.witnessCount}
+                  onChange={(e) =>
+                    updateVenueConfig({
+                      ...config,
+                      witnessCount: Math.max(0, Number(e.target.value) || 0),
+                      rowOverrides: undefined,
+                    })
+                  }
+                />
+              </FormField>
+              <FormField label="見證排數" className="mb-0">
+                <Input
+                  type="number"
+                  min={0}
+                  value={config.witnessRowCount}
+                  onChange={(e) =>
+                    updateVenueConfig({
+                      ...config,
+                      witnessRowCount: Math.max(0, Number(e.target.value) || 0),
+                      rowOverrides: undefined,
+                    })
+                  }
+                />
+              </FormField>
+            </div>
+            {config.witnessRowCount > 0 && config.witnessCount > 0 && (
+              <p className="text-xs text-muted">
+                預計每排約 {avgPerRow} 位；實際分配：
+                {perRow.map((n, i) => `第${i + 1}排 ${n} 位`).join('、')}
+              </p>
+            )}
+          </ConfigSection>
+          {config.witnessRowCount > 0 && (
+            <RowAisleConfigFields
+              config={config}
+              onChange={updateVenueConfig}
+              rowCount={config.witnessRowCount}
+              zone="floor"
+            />
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-5">
         <ConfigSection title="舞台 / 合影座位" description="不另設台下區域">
@@ -685,7 +761,7 @@ export default function SeatingSetup({ event, plan, guests, onEnterDashboard }) 
           為目前子活動「<strong className="text-primary">{plan.name}</strong>」選擇場型；若已有排位再變更配置，進入排位時會提示是否重置。
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
           {VENUE_TYPES.map(({ id, label, desc }) => (
             <button
               key={id}
